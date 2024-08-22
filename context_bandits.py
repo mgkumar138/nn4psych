@@ -13,9 +13,9 @@ from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
 
 # Define constants
-num_trials = 100
 num_epochs = 10
 num_contexts = 3
+num_trials = 100 # per trial
 num_actions = 2
 hidden_units = 64
 gamma = 0.95
@@ -89,11 +89,8 @@ def moving_average(signal, window_size):
 
 
 # Training loop
-def train(params, context, reward_prob,opt_state, prev_h):
+def train(params, context, reward_prob,opt_state, prev_h, history):
 
-    loss_history = []
-    reward_history = []
-    action_history = []
     state = np.zeros(3)
 
     for trial in range(num_trials):
@@ -121,19 +118,20 @@ def train(params, context, reward_prob,opt_state, prev_h):
         state = next_state
         prev_h = h
 
-        loss_history.append(loss)
-        reward_history.append(reward)
-        action_history.append(action)
+        history.append([reward, np.argmax(action), loss])
 
-        print(context, trial, reward_prob, np.round(policy,1), reward)
+        if trial % 50 == 0:
+            print(context, trial, reward_prob, np.round(policy,1), reward)
 
-    return params, loss_history, reward_history, action_history
+    return params, history
 
 # contextual bandit training
 # Initialize parameters & optimizer
 params = initialize_params(jax.random.PRNGKey(0))
 initparams = deepcopy(params)
 optimizer = optax.adam(1e-2)
+
+history = []
 
 # Train the model
 for epoch in range(num_epochs):
@@ -143,31 +141,42 @@ for epoch in range(num_epochs):
     for context in range(num_contexts):
         # depending on the context, determine the reward probabilities
         reward_prob = reward_probs[context]
-        params, loss_history, reward_history, action_history = train(params, context, reward_prob, opt_state, prev_h)
+        params, history = train(params, context, reward_prob, opt_state, prev_h, history)
 
 #%%
 # Plot the reward over trials
 f,ax = plt.subplots(3,2)
-ax[0,0].plot(moving_average(reward_history, window_size=int(num_trials*0.1)), label='MA Reward')
+ax[0,0].plot(moving_average(np.array(history)[:,0], window_size=num_trials), label='MA Reward', zorder=2)
 ax[0,0].set_xlabel('Trial')
 ax[0,0].set_ylabel('Reward')
 ax[0,0].set_title('Reward over Trials')
 
-ax[0,1].plot(loss_history, label='TD error', color='tab:orange')
+ax[0,1].plot(np.array(history)[:,2], zorder=2)
 ax[0,1].set_xlabel('Trial')
 ax[0,1].set_ylabel('Loss')
 ax[0,1].set_title('Actor-Critic Loss over Trials')
 
 
-
-
-im = ax[1,0].imshow(params[2].T,aspect='auto')
-plt.colorbar(im,ax=ax[1,0])
+ax[1,0].plot(np.array(history)[:,1], zorder=2)
+ax[1,0].set_xlabel('Trial')
 ax[1,0].set_ylabel('Action')
-ax[1,0].set_xlabel('Hidden units')
+ax[1,0].set_title('Actions sampled over contexts')
 
-ax[1,1].plot(params[3])
-ax[1,1].set_xlabel('Hidden units')
-ax[1,1].set_ylabel('Value')
+colors = ['r','k','g']
+for axs in [ax[0,0], ax[0,1], ax[1,0]]:
+    i = 1
+    for epoch in range(num_epochs):
+        for context in range(num_contexts):
+            axs.axvline(num_trials*i,color=colors[context], zorder=1)
+            i+=1
+
+im = ax[2,0].imshow(params[2].T,aspect='auto')
+plt.colorbar(im,ax=ax[2,0])
+ax[2,0].set_ylabel('Action')
+ax[2,0].set_xlabel('Hidden units')
+
+ax[2,1].plot(params[3])
+ax[2,1].set_xlabel('Hidden units')
+ax[2,1].set_ylabel('Value')
 f.tight_layout()
 # %%
