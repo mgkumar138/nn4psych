@@ -8,12 +8,12 @@ import numpy as np
 import optax
 import matplotlib.pyplot as plt
 from jax import grad, jit, vmap, random
-from jax.nn import softmax, relu
+from jax.nn import softmax, relu, tanh
 from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
 
 # Define constants
-num_trials = 5
+num_trials = 1000
 num_contexts = 3
 num_actions = 2
 hidden_units = 64
@@ -29,10 +29,10 @@ reward_probs = jnp.array([
 # Initialize model parameters
 def initialize_params(key):
     k1, k2, k3, k4 = jax.random.split(key, 4)
-    Wxh = glorot_uniform()(k1, (3, hidden_units))
-    Whh = glorot_uniform()(k2, (hidden_units, hidden_units))
-    Wha = random.normal(k3, (hidden_units, num_actions))
-    Whc = random.normal(k4, (hidden_units, 1))
+    Wxh =random.normal(k1, (3, hidden_units)) /jnp.sqrt(hidden_units)
+    Whh = random.normal(k2, (hidden_units, hidden_units)) /jnp.sqrt(hidden_units)
+    Wha = random.normal(k3, (hidden_units, num_actions)) *1e-3
+    Whc = random.normal(k4, (hidden_units, 1)) * 1e-3
     return Wxh, Whh, Wha, Whc
 
 params = initialize_params(jax.random.PRNGKey(0))
@@ -41,7 +41,7 @@ initparams = deepcopy(params)
 # Recurrent Neural Network forward pass
 def rnn_forward(params, inputs, h):
     Wxh, Whh, Wha, Whc = params
-    h = relu(jnp.dot(inputs, Wxh) + jnp.dot(h, Whh))
+    h = tanh(jnp.dot(inputs, Wxh) + jnp.dot(h, Whh))
     return h
 
 # Define policy (actor) and value (critic) functions
@@ -74,6 +74,16 @@ def loss_fn(params, inputs, pasth, action, reward, next_value):
     loss = jnp.mean(policy_losses) + 0.5 * jnp.mean(value_losses)
     return loss
 
+def moving_average(signal, window_size):
+    # Pad the signal to handle edges properly
+    padded_signal = np.pad(signal, (window_size//2, window_size//2), mode='edge')
+    
+    # Apply the moving average filter
+    weights = np.ones(window_size) / window_size
+    smoothed_signal = np.convolve(padded_signal, weights, mode='valid')
+    
+    return smoothed_signal
+
 
 # Optimizer
 optimizer = optax.adam(1e-3)
@@ -81,7 +91,7 @@ optimizer = optax.adam(1e-3)
 # Training loop
 def train(params, context, reward_prob):
     
-    past_h = random.normal(jax.random.PRNGKey(0), hidden_units)
+    past_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
     opt_state = optimizer.init(params)
 
     loss_history = []
@@ -105,13 +115,13 @@ def train(params, context, reward_prob):
         params = optax.apply_updates(params, updates)
 
         # print(trial, inputs, past_h, policy, action, reward, h, next_value, loss, grads)
-        print(loss, grads[3])
+        # print(loss, grads[3])
         past_h = h
 
         loss_history.append(loss)
         reward_history.append(reward)
 
-        print(trial, policy, reward)
+        print(trial, np.round(policy,1), reward,loss, grads[1][0,0])
 
     return params, loss_history, reward_history
 
@@ -123,19 +133,27 @@ reward_prob = reward_probs[0]
 # Train the model
 params, loss_history, reward_history = train(params, context, reward_prob)
 
+#%%
 # Plot the reward over trials
-plt.figure()
-# plt.plsot(loss_history)
-plt.plot(loss_history)
-plt.xlabel('Trial')
-plt.ylabel('TD Error Loss')
-plt.title('TD Error Loss over Trials')
-plt.show()
+f,ax = plt.subplots(2,2)
+ax[0,0].plot(moving_average(reward_history, window_size=int(num_trials*0.1)), label='MA Reward')
+ax[0,0].set_xlabel('Trial')
+ax[0,0].set_ylabel('Reward')
+ax[0,0].set_title('Reward over Trials')
 
-plt.figure()
-plt.subplot(121)
-plt.imshow(params[2],aspect='auto')
-plt.colorbar()
-plt.subplot(122)
-plt.plot(params[3])
-plt.show()
+ax[0,1].plot(loss_history, label='TD error', color='tab:orange')
+ax[0,1].set_xlabel('Trial')
+ax[0,1].set_ylabel('Loss')
+ax[0,1].set_title('Actor-Critic Loss over Trials')
+
+
+im = ax[1,0].imshow(params[2].T,aspect='auto')
+plt.colorbar(im,ax=ax[1,0])
+ax[1,0].set_xlabel('Action')
+ax[1,0].set_ylabel('Hidden units')
+
+ax[1,1].plot(params[3])
+ax[1,1].set_xlabel('Hidden units')
+ax[1,1].set_ylabel('Value')
+f.tight_layout()
+# %%
