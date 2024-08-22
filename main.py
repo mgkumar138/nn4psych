@@ -1,3 +1,5 @@
+# code to run model
+# Ganesh, Adam
 import jax
 import jax.numpy as jnp
 import optax
