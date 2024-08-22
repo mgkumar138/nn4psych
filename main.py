@@ -1,14 +1,16 @@
 # code to run model
 # Ganesh, Adam
+
+#%%
 import jax
 import jax.numpy as jnp
-import optax
 import numpy as np
 import matplotlib.pyplot as plt
 from jax import grad, jit, vmap
 from jax.nn import softmax, relu
 from jax.nn.initializers import glorot_uniform, normal
 
+#%%
 # Define constants
 num_trials = 120
 num_contexts = 3
@@ -25,32 +27,36 @@ reward_probs = jnp.array([
 
 # Initialize model parameters
 def initialize_params(key):
-    k1, k2, k3 = jax.random.split(key, 3)
+    k1, k2, k3, k4 = jax.random.split(key, 4)
     Wxh = glorot_uniform()(k1, (3, hidden_units))
     Whh = glorot_uniform()(k2, (hidden_units, hidden_units))
-    Why = glorot_uniform()(k3, (hidden_units, num_actions + 1))
-    return Wxh, Whh, Why
+    Wha = glorot_uniform()(k3, (hidden_units, num_actions))
+    Whc = glorot_uniform()(k4, (hidden_units, 1))
+    return Wxh, Whh, Wha, Whc
 
 params = initialize_params(jax.random.PRNGKey(0))
 
 # Recurrent Neural Network forward pass
 def rnn_forward(params, inputs, h):
-    Wxh, Whh, Why = params
+    Wxh, Whh, Wha, Whc = params
     h = relu(jnp.dot(inputs, Wxh) + jnp.dot(h, Whh))
-    output = jnp.dot(h, Why)
-    return output, h
+    return h
 
 # Define policy (actor) and value (critic) functions
-def policy_and_value(params, inputs, h):
-    output, h = rnn_forward(params, inputs, h)
-    policy = softmax(output[:-1])  # Actor
-    value = output[-1]             # Critic
-    return policy, value, h
+def policy_and_value(params, h):
+    Wxh, Whh, Wha, Whc = params
+    policy = jnp.dot(h, Wha)
+    value = jnp.dot(h, Whc) # Critic
+    policy_prob = softmax(policy)  # Actor
+    return policy_prob, value, h
+
+def sample_action(policy_prob):
+
 
 # Loss function
-def loss_fn(params, contexts, actions, rewards, values, next_values):
+def loss_fn(params, contexts, action_prob, actions, rewards, values, next_values):
     td_errors = rewards + gamma * next_values - values
-    policy_losses = -jnp.log(actions) * td_errors
+    policy_losses = -jnp.log(action_prob) * actions * td_errors
     value_losses = td_errors ** 2
     loss = jnp.mean(policy_losses) + jnp.mean(value_losses)
     return loss
@@ -63,6 +69,7 @@ opt_state = optimizer.init(params)
 def train(params, opt_state, contexts, actions, rewards):
     h = jnp.zeros(hidden_units)
     loss_history = []
+
     for trial in range(num_trials):
         inputs = contexts[trial]
         reward = rewards[trial]
