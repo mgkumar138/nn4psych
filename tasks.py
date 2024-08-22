@@ -76,7 +76,7 @@ class DiscretePredictiveInferenceEnv(gym.Env):
         self.helicopter_positions.append(self.helicopter_pos)
 
         # Calculate reward
-        reward = -abs(self.bag_pos - self.bucket_pos)
+        reward = 1-abs(self.bag_pos - self.bucket_pos)
         
         # Increment trial count
         self.trial += 1
@@ -192,7 +192,7 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
         self.helicopter_positions.append(self.helicopter_pos)
 
         # Calculate reward
-        reward = -abs(self.bag_pos - self.bucket_pos)
+        reward = 1-abs(self.bag_pos - self.bucket_pos)
         
         # Increment trial count
         self.trial += 1
@@ -228,18 +228,19 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
         pass
 
 # Run
-for task_type in ["change-point", "oddball"]:
-    env = ContinuousPredictiveInferenceEnv(condition=task_type) #DiscretePredictiveInferenceEnv(condition=task_type)
+if __name__ == "__main__":
+    for task_type in ["change-point", "oddball"]:
+        env = ContinuousPredictiveInferenceEnv(condition=task_type) #DiscretePredictiveInferenceEnv(condition=task_type)
+            
+        obs = env.reset()
+        done = False
+        total_reward = 0
         
-    obs = env.reset()
-    done = False
-    total_reward = 0
-    
-    while not done:
-        action = env.action_space.sample()  # For testing, we use random actions
-        obs, reward, done, _ = env.step(action)
-        total_reward += reward
-    
-    env.render()
-    print(f"Total Reward for {task_type.capitalize()} Condition: {total_reward}")
-    env.close()
+        while not done:
+            action = env.action_space.sample()  # For testing, we use random actions
+            obs, reward, done, _ = env.step(action)
+            total_reward += reward
+        
+        env.render()
+        print(f"Total Reward for {task_type.capitalize()} Condition: {total_reward}")
+        env.close()
