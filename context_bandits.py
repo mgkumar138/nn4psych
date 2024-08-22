@@ -13,23 +13,24 @@ from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
 
 # Define constants
-num_epochs = 10
+num_epochs = 20
 num_contexts = 4
-num_trials = 50 # per trial
+num_trials = 100 # per trial
 num_actions = 2
 hidden_units = 64
 gamma = 0.0
 seed = 2024
-reward_feedback = False
-action_feedback = False
+
+reward_feedback = True
+action_feedback = True
 context_feedback = True
 
 # Define reward probabilities for each context and each arm
 reward_probs = jnp.array([
-    [1.0, 0.0],  # Context 1
-    [0.0, 1.0],  # Context 2
-    [1.0, 0.0],  # Context 3
-    [0.0, 1.0],
+    [0.99, 0.01],  # Context 1
+    [0.01, 0.99],  # Context 2
+    [0.99, 0.01],  # Context 3
+    [0.01, 0.99],
 ])
 
 # Initialize model parameters
@@ -143,8 +144,7 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
             context_onehot = int_to_onehot(context, num_contexts)
             next_state = np.concatenate([next_state, context_onehot])
         if action_feedback:
-            action_onehot = int_to_onehot(action, num_actions)
-            next_state = np.concatenate([next_state, action_onehot])
+            next_state = np.concatenate([next_state, action])
 
         # get next state value prediction
         new_h = rnn_forward(params, next_state, h)
@@ -187,42 +187,62 @@ for epoch in range(num_epochs):
         params, history = train(params, context, reward_prob, opt_state, prev_h, history)
 
 
-
-
 #%%
 # Plot the reward over trials
-f,ax = plt.subplots(5,1, figsize=(8,12))
-ax[0].plot(moving_average(np.array(history)[:,0], window_size=10), label='MA Reward', zorder=2, color='k')
+# initial learning
+initial_learning_trials = 3 * num_contexts * num_trials
+after_learning_trials = num_epochs-3 * num_contexts * num_trials
+print(f"Avg rewards before: {np.mean(np.array(history)[:initial_learning_trials,0]):.1f}, after {np.mean(np.array(history)[after_learning_trials:,0]):.1f}")
+
+f,ax = plt.subplots(4,1, figsize=(8,12))
+cumr = moving_average(np.array(history)[:initial_learning_trials,0], window_size=20)
+ax[0].plot(cumr, zorder=2, color='k')
 ax[0].set_xlabel('Trial')
 ax[0].set_ylabel('Reward')
-ax[0].set_title('Reward over Trials')
+ax[0].set_title('Rewards over Trials, Before learning')
 
-ax[1].plot(np.array(history)[:,2], zorder=2, color='k')
+cumr = moving_average(np.array(history)[after_learning_trials:,0], window_size=20)
+ax[1].plot(cumr, zorder=2, color='k')
 ax[1].set_xlabel('Trial')
-ax[1].set_ylabel('Loss')
-ax[1].set_title('Actor-Critic Loss over Trials')
+ax[1].set_ylabel('Reward')
+ax[1].set_title('Rewards over Trials, After learning')
+
+# ax[1].plot(np.array(history)[:,2], zorder=2, color='k')
+# ax[1].set_xlabel('Trial')
+# ax[1].set_ylabel('Loss')
+# ax[1].set_title('Actor-Critic Loss over Trials')
 
 
-ax[2].plot(np.array(history)[:,1], zorder=2, color='k')
+ax[2].plot(np.array(history)[:initial_learning_trials,1], zorder=2, color='k')
 ax[2].set_xlabel('Trial')
 ax[2].set_ylabel('Action')
-ax[2].set_title('Actions sampled over contexts')
+ax[2].set_title('Actions sampled over contexts, Before learning')
+
+ax[3].plot(np.array(history)[after_learning_trials:,1], zorder=2, color='k')
+ax[3].set_xlabel('Trial')
+ax[3].set_ylabel('Action')
+ax[3].set_title('Actions sampled over contexts, Before learning')
+
+# ax[3].set_xlabel('Trial')
+# ax[3].set_ylabel('Loss')
+# ax[3].set_title('Actor-Critic Loss over Trials, After learning')
+
 
 colors = ['r','b','g', 'y']
-for a in range(3):
-    i = 1
-    for epoch in range(num_epochs):
+for a in range(4):
+    j=1
+    for i in range(3):
         for context in range(num_contexts):
-            ax[a].axvline(num_trials*i,color=colors[context], zorder=1)
-            i+=1
+            ax[a].axvline(num_trials*j,color=colors[context], zorder=1)
+            j+=1
 
-im = ax[3].imshow(params[2].T,aspect='auto')
-plt.colorbar(im,ax=ax[3])
-ax[3].set_ylabel('Action')
-ax[3].set_xlabel('Hidden units')
+# im = ax[3].imshow(params[2].T,aspect='auto')
+# plt.colorbar(im,ax=ax[3])
+# ax[3].set_ylabel('Action')
+# ax[3].set_xlabel('Hidden units')
 
-ax[4].plot(params[3])
-ax[4].set_xlabel('Hidden units')
-ax[4].set_ylabel('Value')
+# ax[4].plot(params[3])
+# ax[4].set_xlabel('Hidden units')
+# ax[4].set_ylabel('Value')
 f.tight_layout()
 # %%
