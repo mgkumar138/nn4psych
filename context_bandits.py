@@ -14,23 +14,38 @@ from copy import deepcopy
 
 # Define constants
 num_epochs = 10
-num_contexts = 3
-num_trials = 100 # per trial
+num_contexts = 4
+num_trials = 50 # per trial
 num_actions = 2
 hidden_units = 64
-gamma = 0.95
+gamma = 0.0
+seed = 2024
+reward_feedback = False
+action_feedback = False
+context_feedback = True
 
 # Define reward probabilities for each context and each arm
 reward_probs = jnp.array([
-    [0.9, 0.1],  # Context 1
-    [0.2, 0.8],  # Context 2
-    [0.6, 0.4],  # Context 3
+    [1.0, 0.0],  # Context 1
+    [0.0, 1.0],  # Context 2
+    [1.0, 0.0],  # Context 3
+    [0.0, 1.0],
 ])
 
 # Initialize model parameters
 def initialize_params(key):
     k1, k2, k3, k4 = jax.random.split(key, 4)
-    Wxh =random.normal(k1, (3, hidden_units)) /jnp.sqrt(hidden_units)
+
+    n_input = 1
+    if reward_feedback:
+        n_input +=1
+    if action_feedback:
+        n_input +=num_actions
+    if context_feedback:
+        n_input += num_contexts
+    print('Input dimensions: ',n_input)
+
+    Wxh =random.normal(k1, (n_input, hidden_units)) /jnp.sqrt(n_input)
     Whh = random.normal(k2, (hidden_units, hidden_units)) /jnp.sqrt(hidden_units)
     Wha = random.normal(k3, (hidden_units, num_actions)) *1e-3
     Whc = random.normal(k4, (hidden_units, 1)) * 1e-3
@@ -87,14 +102,31 @@ def moving_average(signal, window_size):
     
     return smoothed_signal
 
+def int_to_onehot(index, size):
+    onehot_vector = np.zeros(size)
+    onehot_vector[index] = 1
+    return onehot_vector
+
 
 # Training loop
 def train(params, context, reward_prob,opt_state, prev_h, history):
 
-    state = np.zeros(3)
+    reward = 0.0
+    action = np.random.choice([0,1])
+
+    state = np.array([0.0])
+    if reward_feedback:
+        state = np.concatenate([state, np.array([reward])])
+    if context_feedback:
+        context_onehot = int_to_onehot(context, num_contexts)
+        state = np.concatenate([state, context_onehot])
+    if action_feedback:
+        action_onehot = int_to_onehot(action, num_actions)
+        state = np.concatenate([state, action_onehot])
+
 
     for trial in range(num_trials):
-
+        
         h = rnn_forward(params, state, prev_h)
         policy, _ = policy_and_value(params, h)
         action = get_onehot_action(policy)
@@ -102,7 +134,17 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
         # pass action to env to get next state and reward 
         rprob = reward_prob[np.argmax(action)]
         reward = np.random.choice([0, 1], p=np_softmax([1 - rprob, rprob]))
-        next_state = np.zeros(3) # no input to the RNN as of now
+
+        # update state
+        next_state = np.array([0.0])
+        if reward_feedback:
+            next_state = np.concatenate([next_state, np.array([reward])])
+        if context_feedback:
+            context_onehot = int_to_onehot(context, num_contexts)
+            next_state = np.concatenate([next_state, context_onehot])
+        if action_feedback:
+            action_onehot = int_to_onehot(action, num_actions)
+            next_state = np.concatenate([next_state, action_onehot])
 
         # get next state value prediction
         new_h = rnn_forward(params, next_state, h)
@@ -121,15 +163,15 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
         history.append([reward, np.argmax(action), loss])
 
         if trial % 50 == 0:
-            print(context, trial, reward_prob, np.round(policy,1), reward)
+            print(context, trial, state, reward_prob, np.round(policy,1), reward)
 
     return params, history
 
 # contextual bandit training
 # Initialize parameters & optimizer
-params = initialize_params(jax.random.PRNGKey(0))
+params = initialize_params(jax.random.PRNGKey(seed))
 initparams = deepcopy(params)
-optimizer = optax.adam(1e-2)
+optimizer = optax.adam(1e-3)
 
 history = []
 
@@ -140,43 +182,47 @@ for epoch in range(num_epochs):
 
     for context in range(num_contexts):
         # depending on the context, determine the reward probabilities
+        print(f'### Epoch {epoch} Context {context}')
         reward_prob = reward_probs[context]
         params, history = train(params, context, reward_prob, opt_state, prev_h, history)
 
+
+
+
 #%%
 # Plot the reward over trials
-f,ax = plt.subplots(3,2)
-ax[0,0].plot(moving_average(np.array(history)[:,0], window_size=num_trials), label='MA Reward', zorder=2)
-ax[0,0].set_xlabel('Trial')
-ax[0,0].set_ylabel('Reward')
-ax[0,0].set_title('Reward over Trials')
+f,ax = plt.subplots(5,1, figsize=(8,12))
+ax[0].plot(moving_average(np.array(history)[:,0], window_size=10), label='MA Reward', zorder=2, color='k')
+ax[0].set_xlabel('Trial')
+ax[0].set_ylabel('Reward')
+ax[0].set_title('Reward over Trials')
 
-ax[0,1].plot(np.array(history)[:,2], zorder=2)
-ax[0,1].set_xlabel('Trial')
-ax[0,1].set_ylabel('Loss')
-ax[0,1].set_title('Actor-Critic Loss over Trials')
+ax[1].plot(np.array(history)[:,2], zorder=2, color='k')
+ax[1].set_xlabel('Trial')
+ax[1].set_ylabel('Loss')
+ax[1].set_title('Actor-Critic Loss over Trials')
 
 
-ax[1,0].plot(np.array(history)[:,1], zorder=2)
-ax[1,0].set_xlabel('Trial')
-ax[1,0].set_ylabel('Action')
-ax[1,0].set_title('Actions sampled over contexts')
+ax[2].plot(np.array(history)[:,1], zorder=2, color='k')
+ax[2].set_xlabel('Trial')
+ax[2].set_ylabel('Action')
+ax[2].set_title('Actions sampled over contexts')
 
-colors = ['r','k','g']
-for axs in [ax[0,0], ax[0,1], ax[1,0]]:
+colors = ['r','b','g', 'y']
+for a in range(3):
     i = 1
     for epoch in range(num_epochs):
         for context in range(num_contexts):
-            axs.axvline(num_trials*i,color=colors[context], zorder=1)
+            ax[a].axvline(num_trials*i,color=colors[context], zorder=1)
             i+=1
 
-im = ax[2,0].imshow(params[2].T,aspect='auto')
-plt.colorbar(im,ax=ax[2,0])
-ax[2,0].set_ylabel('Action')
-ax[2,0].set_xlabel('Hidden units')
+im = ax[3].imshow(params[2].T,aspect='auto')
+plt.colorbar(im,ax=ax[3])
+ax[3].set_ylabel('Action')
+ax[3].set_xlabel('Hidden units')
 
-ax[2,1].plot(params[3])
-ax[2,1].set_xlabel('Hidden units')
-ax[2,1].set_ylabel('Value')
+ax[4].plot(params[3])
+ax[4].set_xlabel('Hidden units')
+ax[4].set_ylabel('Value')
 f.tight_layout()
 # %%
