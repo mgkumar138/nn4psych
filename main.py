@@ -13,7 +13,7 @@ from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
 
 # Define constants
-num_trials = 1000
+num_trials = 100
 num_contexts = 3
 num_actions = 2
 hidden_units = 64
@@ -102,7 +102,8 @@ def train(params, context, reward_prob):
     loss_history = []
     reward_history = []
     state = np.zeros_like(context)
-
+    weights = []
+    actions = []
     for trial in range(num_trials):
 
         h = rnn_forward(params, state, prev_h)
@@ -133,15 +134,26 @@ def train(params, context, reward_prob):
 
         print(trial, np.round(policy,1), reward,loss, grads[1][0,0])
 
-    return params, loss_history, reward_history
+        weights.append(h)
+        actions.append(action)
 
+    return params, weights, actions, loss_history, reward_history
+
+#%%
 # Generate synthetic data (context, action, reward tuples)
 np.random.seed(0)
 context = np.eye(num_contexts)[0]
 reward_prob = reward_probs[0]
 
 # Train the model
-params, loss_history, reward_history = train(params, context, reward_prob)
+params, weights, actions, loss_history, reward_history = train(params, context, reward_prob)
+
+#save weights np.array(weights).T
+w_array = np.array(weights).T
+np.save('weights.npy', w_array)
+
+action_array = np.array(actions).T
+np.save('actions.npy', action_array)
 
 #%%
 # Plot the reward over trials
