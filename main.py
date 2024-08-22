@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import matplotlib.pyplot as plt
-from jax import grad, jit, vmap, random
+from jax import grad, jit, vmap, random, lax
 from jax.nn import softmax, relu, tanh
 from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
@@ -63,14 +63,19 @@ def np_softmax(x):
     return e_x / e_x.sum(axis=-1, keepdims=True)
 
 # Loss function
-def loss_fn(params, inputs, pasth, action, reward, next_value):
-    h = rnn_forward(params, inputs, pasth)
+@jit
+def loss_fn(params, state, next_value, prev_h, action, reward):
+    # IMPORTANT: Need to re-run these functions within the loss_function to get the gradients with respect to these weights
+    h = rnn_forward(params, state, prev_h)
     policy_prob, value = policy_and_value(params, h)
 
-    td_errors = reward + gamma * next_value - value
-    policy_losses = -jnp.log(policy_prob) * action * td_errors
+    # compute temporal difference error
+    td_errors = reward + gamma * lax.stop_gradient(next_value) - value
 
+    policy_losses = -jnp.log(policy_prob) * action * td_errors
     value_losses = td_errors ** 2
+
+    # combine los
     loss = jnp.mean(policy_losses) + 0.5 * jnp.mean(value_losses)
     return loss
 
@@ -86,37 +91,42 @@ def moving_average(signal, window_size):
 
 
 # Optimizer
-optimizer = optax.adam(1e-3)
+optimizer = optax.adam(1e-2)
 
 # Training loop
 def train(params, context, reward_prob):
     
-    past_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
+    prev_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
     opt_state = optimizer.init(params)
 
     loss_history = []
     reward_history = []
-    inputs = np.zeros_like(context)
+    state = np.zeros_like(context)
 
     for trial in range(num_trials):
 
-        policy, _ = policy_and_value(params, past_h)
+        h = rnn_forward(params, state, prev_h)
+        policy, _ = policy_and_value(params, h)
         action = get_onehot_action(policy)
 
+        # pass action to env to get next state and reward 
         rprob = reward_prob[np.argmax(action)]
         reward = np.random.choice([0, 1], p=np_softmax([1 - rprob, rprob]))
+        next_state = np.zeros_like(context) # no input to the RNN as of now
 
-        h = rnn_forward(params, inputs, past_h)
-        _, next_value = policy_and_value(params, h)
+        # get next state value prediction
+        new_h = rnn_forward(params, next_state, h)
+        _, next_value = policy_and_value(params, new_h)
 
-        loss, grads = jax.value_and_grad(loss_fn)(params, inputs, past_h,action, reward, next_value)
+        # compute the loss with respect to the state, action, reward and newstate
+        loss, grads = jax.value_and_grad(loss_fn)(params, state, next_value, prev_h, action, reward)
         
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
 
-        # print(trial, inputs, past_h, policy, action, reward, h, next_value, loss, grads)
-        # print(loss, grads[3])
-        past_h = h
+        # make sure you assign the state and rnn state correctly for the next trial
+        state = next_state
+        prev_h = h
 
         loss_history.append(loss)
         reward_history.append(reward)
