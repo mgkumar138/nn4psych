@@ -13,7 +13,7 @@ from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
 
 # Define constants
-num_trials = 2
+num_trials = 5
 num_contexts = 3
 num_actions = 2
 hidden_units = 64
@@ -31,8 +31,8 @@ def initialize_params(key):
     k1, k2, k3, k4 = jax.random.split(key, 4)
     Wxh = glorot_uniform()(k1, (3, hidden_units))
     Whh = glorot_uniform()(k2, (hidden_units, hidden_units))
-    Wha = random.normal(k3, (hidden_units, num_actions)) * 1e-5
-    Whc = random.normal(k4, (hidden_units, 1)) * 1e-5
+    Wha = random.normal(k3, (hidden_units, num_actions))
+    Whc = random.normal(k4, (hidden_units, 1))
     return Wxh, Whh, Wha, Whc
 
 params = initialize_params(jax.random.PRNGKey(0))
@@ -80,7 +80,8 @@ optimizer = optax.adam(1e-3)
 
 # Training loop
 def train(params, context, reward_prob):
-    past_h = jnp.zeros(hidden_units)
+    
+    past_h = random.normal(jax.random.PRNGKey(0), hidden_units)
     opt_state = optimizer.init(params)
 
     loss_history = []
@@ -110,7 +111,7 @@ def train(params, context, reward_prob):
         loss_history.append(loss)
         reward_history.append(reward)
 
-        print(trial, action, reward)
+        print(trial, policy, reward)
 
     return params, loss_history, reward_history
 
