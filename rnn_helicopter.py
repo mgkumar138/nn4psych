@@ -271,17 +271,31 @@ with open("heli_trained_rnn.pkl", "wb") as f:
 
 #%%
 from scipy.optimize import curve_fit
-plt.figure(figsize=(4, 3))
+plt.figure(figsize=(3, 3))
 labels = ['Before', 'After']
 colors=['b', 'r']
+# Define the logistic function
+def logistic_function(x, L ,x0, k, b):
+    return L / (1 + np.exp(-k * (x - x0))) + b
+
+# save trained model
+t=0
+x = np.array(store_states[0])[:,2]
+y = np.array(history)[:200,1]
+
+initial_guess = [1, 5, 1, 0]
+
+# Fit the curve
+params, covariance = curve_fit(logistic_function, x, y, p0=initial_guess)
+x_fit = np.linspace(np.min(x), np.max(x), 500)
+y_fit = logistic_function(x_fit, *params)
+
+plt.scatter(x, y, color=colors[t])
+plt.plot(x_fit, y_fit, color=colors[t], label=labels[t])
 
 t=1
 x = np.array(store_states[-1])[:,2]
 y = np.array(history)[-200:,1]
-
-# Define the logistic function
-def logistic_function(x, L ,x0, k, b):
-    return L / (1 + np.exp(-k * (x - x0))) + b
 
 # Initial guess for the parameters: L, x0, k, and b
 initial_guess = [1, 5, 1, 0]
@@ -293,10 +307,30 @@ y_fit = logistic_function(x_fit, *params)
 
 plt.scatter(x, y, color=colors[t])
 plt.plot(x_fit, y_fit, color=colors[t], label=labels[t])
-
+plt.legend()
 plt.xlabel('Relative Error')
 plt.ylabel('Action')
 plt.title('Psychometric Curve')
-plt.show()
+plt.tight_layout()
+
 # %%
-# save trained model
+f,ax = plt.subplots(2,1,figsize=(8,4))
+before_states = np.array(store_states[0])
+ax[0].plot(before_states[:,0], zorder=2, color='g', label='Model')
+ax[0].scatter(np.arange(200), before_states[:,1], zorder=1, color='r', label='Ball')
+ax[0].plot(np.arange(200),before_states[:,1], zorder=1, color='r', label='Ball',alpha=0.5)
+ax[0].set_xlabel('Trial')
+ax[0].set_ylabel('Location')
+ax[0].set_title('Before learning Change-Point')
+ax[0].legend()
+
+after_states = np.array(store_states[-1])
+ax[1].plot(after_states[:,0], zorder=2, color='g', label='Model')
+ax[1].scatter(np.arange(200),after_states[:,1], zorder=1, color='r', label='Ball')
+ax[1].plot(np.arange(200),after_states[:,1], zorder=1, color='r', label='Ball',alpha=0.5)
+ax[1].set_xlabel('Trial')
+ax[1].set_ylabel('Location')
+ax[1].set_title('After learning Change-Point')
+ax[1].legend()
+f.tight_layout()
+# %%
