@@ -218,12 +218,12 @@ for epoch in range(num_epochs):
             store_params[weight_set].append(params_dict[weight_set])
 
 #%% Save store_h, store_params, history
-np.save('data/activity_contextual.npy', np.array(store_h))
-np.save('data/history_contextual.npy', np.array(history))
+np.save('data/activity_contextual.npy', np.array(store_h)) # (400, 50, 64) 
+np.save('data/history_contextual.npy', np.array(history)) # (20000, 3)
 
 # weights: Wxh, Whh, Wha, Whc
 for i, weight_set in enumerate(['Wxh', 'Whh', 'Wha', 'Whc']):
-    np.save(f'data/{weight_set}_contextual.npy', np.array(store_params[weight_set]))
+    np.save(f'data/{weight_set}_contextual.npy', np.array(store_params[weight_set])) # (400, 50, 64, *)
 
 
 #%%
