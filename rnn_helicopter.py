@@ -11,25 +11,24 @@ from jax import grad, jit, vmap, random, lax
 from jax.nn import softmax, relu, tanh
 from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
+from tasks import DiscretePredictiveInferenceEnv
+
+
 
 # Define constants
-num_epochs = 100
-num_contexts = 2
-num_trials = 50 # per trial
+num_epochs = 20
+num_contexts = 4
+num_trials = 100 # per trial
 num_actions = 2
 hidden_units = 64
 gamma = 0.0
+learning_rate = 1e-4
 seed = 2024
 
 reward_feedback = True
 action_feedback = True
-context_feedback = False
+context_feedback = True
 
-# Define reward probabilities for each context and each arm
-reward_probs = jnp.array([
-    [1.0, 0.0],  # Context 1
-    [0.0, 1.0],  # Context 2
-])
 
 # Initialize model parameters
 def initialize_params(key):
@@ -108,23 +107,15 @@ def int_to_onehot(index, size):
 
 
 # Training loop
-def train(params, context, reward_prob,opt_state, prev_h, history):
+def train(params, prev_h, task_type, history):
 
-    reward = 0.0
-    action = np.random.choice([0,1])
+    env = DiscretePredictiveInferenceEnv(condition=task_type) #DiscretePredictiveInferenceEnv(condition=task_type)
+        
+    obs = env.reset()
+    done = False
+    total_reward = 0
 
-    state = np.array([0.0])
-    if reward_feedback:
-        state = np.concatenate([state, np.array([reward])])
-    if context_feedback:
-        context_onehot = int_to_onehot(context, num_contexts)
-        state = np.concatenate([state, context_onehot])
-    if action_feedback:
-        action_onehot = int_to_onehot(action, num_actions)
-        state = np.concatenate([state, action_onehot])
-
-
-    for trial in range(num_trials):
+    while not done:
         
         h = rnn_forward(params, state, prev_h)
         policy, _ = policy_and_value(params, h)
@@ -132,17 +123,12 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
 
         # pass action to env to get next state and reward 
         rprob = reward_prob[np.argmax(action)]
-        reward = np.random.choice([0, 1], p=[1 - rprob, rprob])
+        reward = np.random.choice([0, 1], p=np_softmax([1 - rprob, rprob]))
 
         # update state
-        next_state = np.array([0.0])
-        if reward_feedback:
-            next_state = np.concatenate([next_state, np.array([reward])])
-        if context_feedback:
-            context_onehot = int_to_onehot(context, num_contexts)
-            next_state = np.concatenate([next_state, context_onehot])
-        if action_feedback:
-            next_state = np.concatenate([next_state, action])
+        next_obs, reward, done, _ = env.step(action)
+        total_reward += reward
+
 
         # get next state value prediction
         new_h = rnn_forward(params, next_state, h)
@@ -160,8 +146,6 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
 
         history.append([reward, np.argmax(action), loss])
 
-        if trial % 50 == 0:
-            print(context, trial, state, reward_prob, np.round(policy,1), reward)
 
     return params, history
 
@@ -169,7 +153,7 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
 # Initialize parameters & optimizer
 params = initialize_params(jax.random.PRNGKey(seed))
 initparams = deepcopy(params)
-optimizer = optax.adam(5e-4)
+optimizer = optax.adam(learning_rate)
 
 history = []
 
@@ -188,19 +172,18 @@ for epoch in range(num_epochs):
 #%%
 # Plot the reward over trials
 # initial learning
-window = 1
 initial_learning_trials = 3 * num_contexts * num_trials
 after_learning_trials = num_epochs-3 * num_contexts * num_trials
 print(f"Avg rewards before: {np.mean(np.array(history)[:initial_learning_trials,0]):.1f}, after {np.mean(np.array(history)[after_learning_trials:,0]):.1f}")
 
 f,ax = plt.subplots(4,1, figsize=(8,12))
-cumr = moving_average(np.array(history)[:initial_learning_trials,0], window_size=window)
+cumr = moving_average(np.array(history)[:initial_learning_trials,0], window_size=20)
 ax[0].plot(cumr, zorder=2, color='k')
 ax[0].set_xlabel('Trial')
 ax[0].set_ylabel('Reward')
 ax[0].set_title('Rewards over Trials, Before learning')
 
-cumr = moving_average(np.array(history)[after_learning_trials:,0], window_size=window)
+cumr = moving_average(np.array(history)[after_learning_trials:,0], window_size=20)
 ax[1].plot(cumr, zorder=2, color='k')
 ax[1].set_xlabel('Trial')
 ax[1].set_ylabel('Reward')

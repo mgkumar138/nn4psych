@@ -235,11 +235,15 @@ if __name__ == "__main__":
         obs = env.reset()
         done = False
         total_reward = 0
+
+        print(obs)
         
         while not done:
             action = env.action_space.sample()  # For testing, we use random actions
             obs, reward, done, _ = env.step(action)
             total_reward += reward
+
+            print(action, obs, reward, done)
         
         env.render()
         print(f"Total Reward for {task_type.capitalize()} Condition: {total_reward}")
