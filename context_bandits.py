@@ -14,7 +14,7 @@ from copy import deepcopy
 
 # Define constants
 num_epochs = 200
-epoch_stop_training = 198
+epoch_stop_training = 190
 num_contexts = 2
 num_trials = 50 # per trial
 num_actions = 2
@@ -218,13 +218,15 @@ for epoch in range(num_epochs):
             store_params[weight_set].append(params_dict[weight_set])
 
 #%% Save store_h, store_params, history
+
+# [note: no training for final 10 epochs x 2 contexts x 50 trials]
+
 np.save('data/activity_contextual.npy', np.array(store_h)) # (400, 50, 64) 
 np.save('data/history_contextual.npy', np.array(history)) # (20000, 3)
 
 # weights: Wxh, Whh, Wha, Whc
 for i, weight_set in enumerate(['Wxh', 'Whh', 'Wha', 'Whc']):
     np.save(f'data/{weight_set}_contextual.npy', np.array(store_params[weight_set])) # (400, 50, 64, *)
-
 
 #%%
 # Plot the reward over trials
@@ -288,4 +290,9 @@ for a in range(len(ax)):
             j+=1
 
 f.tight_layout()
+
+# save to plots dir
+plt.savefig('plots/contextual_bandit.png')
+
+
 # %%
