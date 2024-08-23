@@ -14,11 +14,12 @@ from copy import deepcopy
 
 # Define constants
 num_epochs = 100
+epoch_stop_training = 90
 num_contexts = 2
 num_trials = 50 # per trial
 num_actions = 2
 hidden_units = 64
-gamma = 0.0
+gamma = 0.0  # play around with different gamma between 0.0 to 0.99
 seed = 2024
 
 reward_feedback = True
@@ -148,11 +149,14 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
         new_h = rnn_forward(params, next_state, h)
         _, next_value = policy_and_value(params, new_h)
 
-        # compute the loss with respect to the state, action, reward and newstate
-        loss, grads = jax.value_and_grad(loss_fn)(params, state, next_value, prev_h, action, reward)
-        
-        updates, opt_state = optimizer.update(grads, opt_state, params)
-        params = optax.apply_updates(params, updates)
+        if trial < epoch_stop_training:
+            # compute the loss with respect to the state, action, reward and newstate
+            loss, grads = jax.value_and_grad(loss_fn)(params, state, next_value, prev_h, action, reward)
+            #update the weights
+            updates, opt_state = optimizer.update(grads, opt_state, params)
+            params = optax.apply_updates(params, updates)
+        else:
+            print('no learning')
 
         # make sure you assign the state and rnn state correctly for the next trial
         state = next_state
@@ -189,11 +193,13 @@ for epoch in range(num_epochs):
 # Plot the reward over trials
 # initial learning
 window = 1
-initial_learning_trials = 3 * num_contexts * num_trials
-after_learning_trials = num_epochs-3 * num_contexts * num_trials
+view_epochs = 3
+initial_learning_trials = view_epochs * num_contexts * num_trials
+after_learning_trials = (num_epochs-view_epochs) * num_contexts * num_trials
+
 print(f"Avg rewards before: {np.mean(np.array(history)[:initial_learning_trials,0]):.1f}, after {np.mean(np.array(history)[after_learning_trials:,0]):.1f}")
 
-f,ax = plt.subplots(4,1, figsize=(8,12))
+f,ax = plt.subplots(6,1, figsize=(8,12))
 cumr = moving_average(np.array(history)[:initial_learning_trials,0], window_size=window)
 ax[0].plot(cumr, zorder=2, color='k')
 ax[0].set_xlabel('Trial')
@@ -220,28 +226,29 @@ ax[2].set_title('Actions sampled over contexts, Before learning')
 ax[3].plot(np.array(history)[after_learning_trials:,1], zorder=2, color='k')
 ax[3].set_xlabel('Trial')
 ax[3].set_ylabel('Action')
-ax[3].set_title('Actions sampled over contexts, Before learning')
+ax[3].set_title('Actions sampled over contexts, After learning')
+
+ax[4].plot(np.array(history)[:initial_learning_trials,2], zorder=2, color='k')
+ax[4].set_xlabel('Trial')
+ax[4].set_ylabel('Loss')
+ax[4].set_title('Loss over contexts, Before learning')
+
+ax[5].plot(np.array(history)[after_learning_trials:,2], zorder=2, color='k')
+ax[5].set_xlabel('Trial')
+ax[5].set_ylabel('Loss')
+ax[5].set_title('Loss over contexts, After learning')
 
 # ax[3].set_xlabel('Trial')
 # ax[3].set_ylabel('Loss')
 # ax[3].set_title('Actor-Critic Loss over Trials, After learning')
 
-
 colors = ['r','b','g', 'y']
-for a in range(4):
+for a in range(len(ax)):
     j=1
-    for i in range(3):
+    for i in range(view_epochs):
         for context in range(num_contexts):
             ax[a].axvline(num_trials*j,color=colors[context], zorder=1)
             j+=1
 
-# im = ax[3].imshow(params[2].T,aspect='auto')
-# plt.colorbar(im,ax=ax[3])
-# ax[3].set_ylabel('Action')
-# ax[3].set_xlabel('Hidden units')
-
-# ax[4].plot(params[3])
-# ax[4].set_xlabel('Hidden units')
-# ax[4].set_ylabel('Value')
 f.tight_layout()
 # %%
