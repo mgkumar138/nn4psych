@@ -169,13 +169,16 @@ def train(params, context, reward_prob,opt_state, prev_h, history, train_var):
         if trial % 50 == 0:
             print(context, trial, state, reward_prob, np.round(policy,1), reward)
 
-    return params, history, prev_h
+    return params, history, prev_h, opt_state
 
+#%%
 # contextual bandit training
 # Initialize parameters & optimizer
 params = initialize_params(jax.random.PRNGKey(seed))
 initparams = deepcopy(params)
 optimizer = optax.adam(learning_rate)
+opt_state = optimizer.init(params)
+prev_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
 
 history = []
 store_h = []
@@ -183,23 +186,20 @@ store_params = []
 
 # Train the model
 for epoch in range(num_epochs):
-    h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
-    opt_state = optimizer.init(params)
-
     if epoch < epoch_stop_training:
         train_var = True
     else:
         train_var = False
-
     for context in range(num_contexts):
         # depending on the context, determine the reward probabilities
 
         print(f'### Epoch {epoch} Context {context}')
         reward_prob = reward_probs[context]
-        params, history, prev_h = train(params, context, reward_prob, opt_state, h, history,train_var)
+        params, history, prev_h, opt_state = train(params, context, reward_prob, opt_state, prev_h, history,train_var)
 
         store_h.append(prev_h)
         store_params.append(params)
+
 
 #%%
 # Plot the reward over trials
