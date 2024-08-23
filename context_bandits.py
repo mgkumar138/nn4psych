@@ -13,14 +13,15 @@ from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
 
 # Define constants
-num_epochs = 100
-epoch_stop_training = 90
+num_epochs = 200
+epoch_stop_training = 198
 num_contexts = 2
 num_trials = 50 # per trial
 num_actions = 2
 hidden_units = 64
 gamma = 0.0  # play around with different gamma between 0.0 to 0.99
 seed = 2024
+learning_rate = 5e-4
 
 reward_feedback = True
 action_feedback = True
@@ -109,7 +110,7 @@ def int_to_onehot(index, size):
 
 
 # Training loop
-def train(params, context, reward_prob,opt_state, prev_h, history):
+def train(params, context, reward_prob,opt_state, prev_h, history, train_var):
 
     reward = 0.0
     action = np.random.choice([0,1])
@@ -149,7 +150,7 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
         new_h = rnn_forward(params, next_state, h)
         _, next_value = policy_and_value(params, new_h)
 
-        if trial < epoch_stop_training:
+        if train_var:
             # compute the loss with respect to the state, action, reward and newstate
             loss, grads = jax.value_and_grad(loss_fn)(params, state, next_value, prev_h, action, reward)
             #update the weights
@@ -157,6 +158,7 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
             params = optax.apply_updates(params, updates)
         else:
             print('no learning')
+            loss = 0
 
         # make sure you assign the state and rnn state correctly for the next trial
         state = next_state
@@ -167,27 +169,37 @@ def train(params, context, reward_prob,opt_state, prev_h, history):
         if trial % 50 == 0:
             print(context, trial, state, reward_prob, np.round(policy,1), reward)
 
-    return params, history
+    return params, history, prev_h
 
 # contextual bandit training
 # Initialize parameters & optimizer
 params = initialize_params(jax.random.PRNGKey(seed))
 initparams = deepcopy(params)
-optimizer = optax.adam(5e-4)
+optimizer = optax.adam(learning_rate)
 
 history = []
+store_h = []
+store_params = []
 
 # Train the model
 for epoch in range(num_epochs):
-    prev_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
+    h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
     opt_state = optimizer.init(params)
+
+    if epoch < epoch_stop_training:
+        train_var = True
+    else:
+        train_var = False
 
     for context in range(num_contexts):
         # depending on the context, determine the reward probabilities
+
         print(f'### Epoch {epoch} Context {context}')
         reward_prob = reward_probs[context]
-        params, history = train(params, context, reward_prob, opt_state, prev_h, history)
+        params, history, prev_h = train(params, context, reward_prob, opt_state, h, history,train_var)
 
+        store_h.append(prev_h)
+        store_params.append(params)
 
 #%%
 # Plot the reward over trials

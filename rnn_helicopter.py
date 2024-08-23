@@ -16,8 +16,6 @@ from tasks import DiscretePredictiveInferenceEnv
 
 
 # Define constants
-num_epochs = 20
-num_contexts = 4
 num_trials = 100 # per trial
 num_actions = 2
 hidden_units = 64
@@ -69,10 +67,6 @@ def get_onehot_action(policy_prob):
     onehotg[A] = 1
     return onehotg
 
-def np_softmax(x):
-    e_x = np.exp(x - np.max(x))  # Subtract max(x) for numerical stability
-    return e_x / e_x.sum(axis=-1, keepdims=True)
-
 # Loss function
 @jit
 def loss_fn(params, state, next_value, prev_h, action, reward):
@@ -123,7 +117,7 @@ def train(params, prev_h, task_type, history):
 
         # pass action to env to get next state and reward 
         rprob = reward_prob[np.argmax(action)]
-        reward = np.random.choice([0, 1], p=np_softmax([1 - rprob, rprob]))
+        reward = np.random.choice([0, 1], p=[1 - rprob, rprob])
 
         # update state
         next_obs, reward, done, _ = env.step(action)
@@ -168,63 +162,3 @@ for epoch in range(num_epochs):
         reward_prob = reward_probs[context]
         params, history = train(params, context, reward_prob, opt_state, prev_h, history)
 
-
-#%%
-# Plot the reward over trials
-# initial learning
-initial_learning_trials = 3 * num_contexts * num_trials
-after_learning_trials = num_epochs-3 * num_contexts * num_trials
-print(f"Avg rewards before: {np.mean(np.array(history)[:initial_learning_trials,0]):.1f}, after {np.mean(np.array(history)[after_learning_trials:,0]):.1f}")
-
-f,ax = plt.subplots(4,1, figsize=(8,12))
-cumr = moving_average(np.array(history)[:initial_learning_trials,0], window_size=20)
-ax[0].plot(cumr, zorder=2, color='k')
-ax[0].set_xlabel('Trial')
-ax[0].set_ylabel('Reward')
-ax[0].set_title('Rewards over Trials, Before learning')
-
-cumr = moving_average(np.array(history)[after_learning_trials:,0], window_size=20)
-ax[1].plot(cumr, zorder=2, color='k')
-ax[1].set_xlabel('Trial')
-ax[1].set_ylabel('Reward')
-ax[1].set_title('Rewards over Trials, After learning')
-
-# ax[1].plot(np.array(history)[:,2], zorder=2, color='k')
-# ax[1].set_xlabel('Trial')
-# ax[1].set_ylabel('Loss')
-# ax[1].set_title('Actor-Critic Loss over Trials')
-
-
-ax[2].plot(np.array(history)[:initial_learning_trials,1], zorder=2, color='k')
-ax[2].set_xlabel('Trial')
-ax[2].set_ylabel('Action')
-ax[2].set_title('Actions sampled over contexts, Before learning')
-
-ax[3].plot(np.array(history)[after_learning_trials:,1], zorder=2, color='k')
-ax[3].set_xlabel('Trial')
-ax[3].set_ylabel('Action')
-ax[3].set_title('Actions sampled over contexts, Before learning')
-
-# ax[3].set_xlabel('Trial')
-# ax[3].set_ylabel('Loss')
-# ax[3].set_title('Actor-Critic Loss over Trials, After learning')
-
-
-colors = ['r','b','g', 'y']
-for a in range(4):
-    j=1
-    for i in range(3):
-        for context in range(num_contexts):
-            ax[a].axvline(num_trials*j,color=colors[context], zorder=1)
-            j+=1
-
-# im = ax[3].imshow(params[2].T,aspect='auto')
-# plt.colorbar(im,ax=ax[3])
-# ax[3].set_ylabel('Action')
-# ax[3].set_xlabel('Hidden units')
-
-# ax[4].plot(params[3])
-# ax[4].set_xlabel('Hidden units')
-# ax[4].set_ylabel('Value')
-f.tight_layout()
-# %%
