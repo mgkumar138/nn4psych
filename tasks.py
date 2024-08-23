@@ -214,7 +214,7 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
 
     def render(self, mode='human'):
         plt.figure(figsize=(10, 6))
-        plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
+        # plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
         plt.plot(self.trials, self.bag_positions, label='Bag Position', color='red', marker='o', linestyle='-.', alpha=0.5)
         plt.plot(self.trials, self.helicopter_positions, label='Helicopter', color='green', linestyle='--')
 
