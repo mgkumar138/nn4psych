@@ -11,32 +11,33 @@ from jax import grad, jit, vmap, random, lax
 from jax.nn import softmax, relu, tanh
 from jax.nn.initializers import glorot_uniform, normal
 from copy import deepcopy
+from tasks import ContinuousPredictiveInferenceEnv
 
 # Define constants
-num_epochs = 200
-epoch_stop_training = 198
-num_contexts = 2
+num_epochs = 500
+num_trials = 200
+epoch_stop_training = 1000
+num_context = 1
+obs_size = 3
 num_actions = 2
 hidden_units = 64
-gamma = 0.0  # play around with different gamma between 0.0 to 0.99
+gamma = 0.95  # play around with different gamma between 0.0 to 0.99
 seed = 2024
 learning_rate = 5e-4
 
-reward_feedback = True
-action_feedback = True
-context_feedback = True
+reward_feedback = False
+action_feedback = False
 
 # Initialize model parameters
 def initialize_params(key):
     k1, k2, k3, k4 = jax.random.split(key, 4)
 
-    n_input = 1
+    n_input = obs_size+num_context
     if reward_feedback:
         n_input +=1
     if action_feedback:
         n_input +=num_actions
-    if context_feedback:
-        n_input += num_contexts
+
     print('Input dimensions: ',n_input)
 
     Wxh =random.normal(k1, (n_input, hidden_units)) /jnp.sqrt(n_input)
@@ -65,10 +66,6 @@ def get_onehot_action(policy_prob):
     onehotg[A] = 1
     return onehotg
 
-def np_softmax(x):
-    e_x = np.exp(x - np.max(x))  # Subtract max(x) for numerical stability
-    return e_x / e_x.sum(axis=-1, keepdims=True)
-
 # Loss function
 @jit
 def loss_fn(params, state, next_value, prev_h, action, reward):
@@ -82,7 +79,7 @@ def loss_fn(params, state, next_value, prev_h, action, reward):
     policy_losses = -jnp.log(policy_prob) * action * td_errors
     value_losses = td_errors ** 2
 
-    # combine los
+    # combine loss
     loss = jnp.mean(policy_losses) + 0.5 * jnp.mean(value_losses)
     return loss
 
@@ -103,39 +100,47 @@ def int_to_onehot(index, size):
 
 
 # Training loop
-def train(params, context, reward_prob,opt_state, prev_h, history, train_var):
+def train(params, task_type,opt_state, prev_h, history, train_var):
 
+    env = ContinuousPredictiveInferenceEnv(condition=task_type) #DiscretePredictiveInferenceEnv(condition=task_type)
+    
+    done = False
     reward = 0.0
+    total_reward = 0
     action = np.random.choice([0,1])
+    
+    store_states = []
+    store_h = []
 
-    state = np.array([0.0])
+    obs = env.reset()
+    state = np.array(obs/300)
+    if task_type == "change-point":
+        context =  np.array([0])
+    elif task_type == "oddball":
+        context =  np.array([1])
+    state = np.concatenate([state,context])
+
+
     if reward_feedback:
         state = np.concatenate([state, np.array([reward])])
-    if context_feedback:
-        context_onehot = int_to_onehot(context, num_contexts)
-        state = np.concatenate([state, context_onehot])
     if action_feedback:
         action_onehot = int_to_onehot(action, num_actions)
         state = np.concatenate([state, action_onehot])
 
-
-    for trial in range(num_trials):
+    while not done:
         
         h = rnn_forward(params, state, prev_h)
         policy, _ = policy_and_value(params, h)
         action = get_onehot_action(policy)
 
-        # pass action to env to get next state and reward 
-        rprob = reward_prob[np.argmax(action)]
-        reward = np.random.choice([0, 1], p=[1 - rprob, rprob])
+        next_obs, unnorm_reward, done, _ = env.step(np.argmax(action))
+        next_state = next_obs/300
+        next_state = np.concatenate([next_state,context])
+        reward = (unnorm_reward/300)
+        total_reward += reward
 
-        # update state
-        next_state = np.array([0.0])
         if reward_feedback:
             next_state = np.concatenate([next_state, np.array([reward])])
-        if context_feedback:
-            context_onehot = int_to_onehot(context, num_contexts)
-            next_state = np.concatenate([next_state, context_onehot])
         if action_feedback:
             next_state = np.concatenate([next_state, action])
 
@@ -153,28 +158,32 @@ def train(params, context, reward_prob,opt_state, prev_h, history, train_var):
             print('no learning')
             loss = 0
 
+        # if env.trial % 100 == 0:
+        #     print(np.round(state,1),np.argmax(action), reward)
+        
+        history.append([reward, np.argmax(action), loss])
+        store_states.append(state)
+        store_h.append(h)
+
         # make sure you assign the state and rnn state correctly for the next trial
         state = next_state
         prev_h = h
 
-        history.append([reward, np.argmax(action), loss])
+    return params, history, prev_h, opt_state, total_reward, store_states, store_h
 
-        if trial % 50 == 0:
-            print(context, trial, state, reward_prob, np.round(policy,1), reward)
-
-    return params, history, prev_h, opt_state
-
-# contextual bandit training
+#%%
+# Helicopter task
 # Initialize parameters & optimizer
 params = initialize_params(jax.random.PRNGKey(seed))
 initparams = deepcopy(params)
 optimizer = optax.adam(learning_rate)
 opt_state = optimizer.init(params)
-prev_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
+prev_h = random.normal(jax.random.PRNGKey(seed), (hidden_units,))*0.1
 
 history = []
-store_h = []
+store_rnn = []
 store_params = []
+store_states = []
 
 # Train the model
 for epoch in range(num_epochs):
@@ -182,44 +191,39 @@ for epoch in range(num_epochs):
         train_var = True
     else:
         train_var = False
-    for context in range(num_contexts):
-        # depending on the context, determine the reward probabilities
 
-        print(f'### Epoch {epoch} Context {context}')
-        reward_prob = reward_probs[context]
-        params, history, prev_h, opt_state = train(params, context, reward_prob, opt_state, prev_h, history,train_var)
+    for task_type in ["change-point"]:
+
+        params, history, prev_h, opt_state, total_reward, store_s, store_h = train(params, task_type, opt_state, prev_h, history,train_var)
+
+        print(f'### Epoch {epoch}, R: {total_reward}')
 
         store_h.append(prev_h)
         store_params.append(params)
+        store_states.append(store_s)
+        store_rnn.append(store_h)
+
 
 #%%
-# Plot the reward over trials
-# initial learning
 window = 1
-view_epochs = 3
-initial_learning_trials = view_epochs * num_contexts * num_trials
-after_learning_trials = (num_epochs-view_epochs) * num_contexts * num_trials
+view_epochs = 1
+initial_learning_trials = view_epochs * num_trials
+after_learning_trials = (num_epochs-view_epochs) * num_trials
 
 print(f"Avg rewards before: {np.mean(np.array(history)[:initial_learning_trials,0]):.1f}, after {np.mean(np.array(history)[after_learning_trials:,0]):.1f}")
 
-f,ax = plt.subplots(6,1, figsize=(8,12))
+f,ax = plt.subplots(8,1, figsize=(8,15))
 cumr = moving_average(np.array(history)[:initial_learning_trials,0], window_size=window)
 ax[0].plot(cumr, zorder=2, color='k')
 ax[0].set_xlabel('Trial')
-ax[0].set_ylabel('Reward')
+ax[0].set_ylabel('Error')
 ax[0].set_title('Rewards over Trials, Before learning')
 
 cumr = moving_average(np.array(history)[after_learning_trials:,0], window_size=window)
 ax[1].plot(cumr, zorder=2, color='k')
 ax[1].set_xlabel('Trial')
-ax[1].set_ylabel('Reward')
+ax[1].set_ylabel('Error')
 ax[1].set_title('Rewards over Trials, After learning')
-
-# ax[1].plot(np.array(history)[:,2], zorder=2, color='k')
-# ax[1].set_xlabel('Trial')
-# ax[1].set_ylabel('Loss')
-# ax[1].set_title('Actor-Critic Loss over Trials')
-
 
 ax[2].plot(np.array(history)[:initial_learning_trials,1], zorder=2, color='k')
 ax[2].set_xlabel('Trial')
@@ -241,17 +245,58 @@ ax[5].set_xlabel('Trial')
 ax[5].set_ylabel('Loss')
 ax[5].set_title('Loss over contexts, After learning')
 
-# ax[3].set_xlabel('Trial')
-# ax[3].set_ylabel('Loss')
-# ax[3].set_title('Actor-Critic Loss over Trials, After learning')
+before_states = np.array(store_states[0])
+ax[6].plot(before_states[:,0], zorder=2, color='g', label='Model')
+ax[6].scatter(np.arange(200), before_states[:,1], zorder=1, color='r', label='Ball')
+ax[6].set_xlabel('Trial')
+ax[6].set_ylabel('Location')
+ax[6].set_title('Before learning')
+ax[6].legend()
 
-colors = ['r','b','g', 'y']
-for a in range(len(ax)):
-    j=1
-    for i in range(view_epochs):
-        for context in range(num_contexts):
-            ax[a].axvline(num_trials*j,color=colors[context], zorder=1)
-            j+=1
+after_states = np.array(store_states[-1])
+ax[7].plot(after_states[:,0], zorder=2, color='g', label='Model')
+ax[7].scatter(np.arange(200),after_states[:,1], zorder=1, color='r', label='Ball')
+ax[7].set_xlabel('Trial')
+ax[7].set_ylabel('Location')
+ax[7].set_title('After learning')
+ax[7].legend()
 
 f.tight_layout()
+
+#%%
+# save
+import pickle
+with open("heli_trained_rnn.pkl", "wb") as f:
+    pickle.dump((store_params, store_rnn, store_states, history), f)
+
+#%%
+from scipy.optimize import curve_fit
+plt.figure(figsize=(4, 3))
+labels = ['Before', 'After']
+colors=['b', 'r']
+
+t=1
+x = np.array(store_states[-1])[:,2]
+y = np.array(history)[-200:,1]
+
+# Define the logistic function
+def logistic_function(x, L ,x0, k, b):
+    return L / (1 + np.exp(-k * (x - x0))) + b
+
+# Initial guess for the parameters: L, x0, k, and b
+initial_guess = [1, 5, 1, 0]
+
+# Fit the curve
+params, covariance = curve_fit(logistic_function, x, y, p0=initial_guess)
+x_fit = np.linspace(np.min(x), np.max(x), 500)
+y_fit = logistic_function(x_fit, *params)
+
+plt.scatter(x, y, color=colors[t])
+plt.plot(x_fit, y_fit, color=colors[t], label=labels[t])
+
+plt.xlabel('Relative Error')
+plt.ylabel('Action')
+plt.title('Psychometric Curve')
+plt.show()
 # %%
+# save trained model

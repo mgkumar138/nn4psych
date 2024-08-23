@@ -128,14 +128,14 @@ class DiscretePredictiveInferenceEnv(gym.Env):
         pass
 
 class ContinuousPredictiveInferenceEnv(gym.Env):
-    def __init__(self, condition="change-point"):
+    def __init__(self, condition="change-point", total_trials=200):
         super(ContinuousPredictiveInferenceEnv, self).__init__()
         
         # Observation: currentCurrent bucket position, last bag position, and prediction error
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low=np.array([0, 0, 0]), 
                                             high=np.array([300, 300, 300]), dtype=np.float32)
-        
+        self.total_trials = total_trials
         # Initialize variables
         self.helicopter_pos = 150
         self.bucket_pos = 150
@@ -171,9 +171,9 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
     def step(self, action):
         # Update bucket position based on action
         if action == 0:  # Move left
-            self.bucket_pos = max(0, self.bucket_pos - 1)
+            self.bucket_pos = max(0, self.bucket_pos - 30)
         elif action == 1:  # Move right
-            self.bucket_pos = min(300, self.bucket_pos + 1)
+            self.bucket_pos = min(300, self.bucket_pos + 30)
         
         # Determine bag position based on task type
         if self.task_type == "change-point":
@@ -193,7 +193,7 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
         self.helicopter_positions.append(self.helicopter_pos)
 
         # Calculate reward
-        reward = 1-abs(self.bag_pos - self.bucket_pos)
+        reward = -abs(self.bag_pos - self.bucket_pos)
         
         # Increment trial count
         self.trial += 1
@@ -202,7 +202,7 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
         observation = np.array([self.bucket_pos, self.bag_pos, self.bag_pos - self.bucket_pos], dtype=np.float32)
         
         # Determine if the episode should end (e.g., after 100 trials)
-        done = self.trial >= 100
+        done = self.trial >= self.total_trials
         
         return observation, reward, done, {}
     
