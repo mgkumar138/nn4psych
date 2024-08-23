@@ -125,7 +125,12 @@ def train(params, context, reward_prob,opt_state, prev_h, history, train_var):
         action_onehot = int_to_onehot(action, num_actions)
         state = np.concatenate([state, action_onehot])
 
-
+    params_dict = {'Wxh':[],
+                   'Whh':[],
+                   'Wha':[],
+                   'Whc':[]
+                   }
+    activity_list = []
     for trial in range(num_trials):
         
         h = rnn_forward(params, state, prev_h)
@@ -164,12 +169,19 @@ def train(params, context, reward_prob,opt_state, prev_h, history, train_var):
         state = next_state
         prev_h = h
 
+        params_dict['Wxh'].append(params[0])
+        params_dict['Whh'].append(params[1])
+        params_dict['Wha'].append(params[2])
+        params_dict['Whc'].append(params[3])
+        
+        activity_list.append(h)
+
         history.append([reward, np.argmax(action), loss])
 
         if trial % 50 == 0:
             print(context, trial, state, reward_prob, np.round(policy,1), reward)
 
-    return params, history, prev_h, opt_state
+    return params, params_dict, activity_list, history, prev_h, opt_state
 
 #%%
 # contextual bandit training
@@ -182,7 +194,11 @@ prev_h = random.normal(jax.random.PRNGKey(0), (hidden_units,))*0.1
 
 history = []
 store_h = []
-store_params = []
+store_params = {'Wxh':[],
+                   'Whh':[],
+                   'Wha':[],
+                   'Whc':[]
+                   }
 
 # Train the model
 for epoch in range(num_epochs):
@@ -195,10 +211,19 @@ for epoch in range(num_epochs):
 
         print(f'### Epoch {epoch} Context {context}')
         reward_prob = reward_probs[context]
-        params, history, prev_h, opt_state = train(params, context, reward_prob, opt_state, prev_h, history,train_var)
+        params, params_dict, activity_list, history, prev_h, opt_state = train(params, context, reward_prob, opt_state, prev_h, history,train_var)
 
-        store_h.append(prev_h)
-        store_params.append(params)
+        store_h.append(activity_list)
+        for i, weight_set in enumerate(['Wxh', 'Whh', 'Wha', 'Whc']):
+            store_params[weight_set].append(params_dict[weight_set])
+
+#%% Save store_h, store_params, history
+np.save('data/activity_contextual.npy', np.array(store_h))
+np.save('data/history_contextual.npy', np.array(history))
+
+# weights: Wxh, Whh, Wha, Whc
+for i, weight_set in enumerate(['Wxh', 'Whh', 'Wha', 'Whc']):
+    np.save(f'data/{weight_set}_contextual.npy', np.array(store_params[weight_set]))
 
 
 #%%
