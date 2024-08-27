@@ -16,7 +16,7 @@ from tasks import ContinuousPredictiveInferenceEnv
 # Define constants
 num_epochs = 500
 num_trials = 200
-epoch_stop_training = 1000
+epoch_stop_training = 490
 num_context = 1
 obs_size = 3
 num_actions = 2
@@ -198,11 +198,13 @@ for epoch in range(num_epochs):
 
         print(f'### Epoch {epoch}, R: {total_reward}')
 
-        store_h.append(prev_h)
+        # store_h.append(prev_h)
         store_params.append(params)
         store_states.append(store_s)
         store_rnn.append(store_h)
 
+np.save('data/activity_helicopter.npy', np.array(store_rnn)) # (400, 50, 64) 
+np.save('data/history_helicopter.npy', np.array(history)) # (20000, 3)
 
 #%%
 window = 1
@@ -274,6 +276,7 @@ from scipy.optimize import curve_fit
 plt.figure(figsize=(3, 3))
 labels = ['Before', 'After']
 colors=['b', 'r']
+
 # Define the logistic function
 def logistic_function(x, L ,x0, k, b):
     return L / (1 + np.exp(-k * (x - x0))) + b
@@ -312,6 +315,7 @@ plt.xlabel('Relative Error')
 plt.ylabel('Action')
 plt.title('Psychometric Curve')
 plt.tight_layout()
+plt.show()
 
 # %%
 f,ax = plt.subplots(2,1,figsize=(8,4))
@@ -333,4 +337,5 @@ ax[1].set_ylabel('Location')
 ax[1].set_title('After learning Change-Point')
 ax[1].legend()
 f.tight_layout()
+plt.show()
 # %%
