@@ -1,4 +1,9 @@
 .git
 __pycache__
 *copy*
+<<<<<<< HEAD
 *npy
+*.pkl*
+=======
+*npy
+>>>>>>> origin/main
