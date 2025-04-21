@@ -7,38 +7,47 @@ Context- can put in reward, action, context input & integrate these together
 RNN helicopter - all of above and synced to continuous helicopter task
 
 
-analysis.py - analysis of rnn unit activations (incomplete)
+analysis_significant_rnn_units.py - analysis of rnn unit activations (incomplete)
 analyze_compiled.py - compiles and plots data from best run
-analyze_hyperparams_gamma
-
-tasks.py - holds the discrete / continuous helicopter environment. 
-    -'step' to interact and get [bucket_pos, bag_pos, prediction_error] at each trial
-
-pyem_models.py - contains current model fitting
-
+analyze_hyperparams_{rnn_param}.py - plots areas for each param
+analyze_normative.py - bayesian model sim and plotting
+analyze_rnn_fp.py - uses FixedPointFinder and plots combined state space
+analyze_rnn.py - plots combined state space 
 bayesian_models.py - contains (incomplete) PYMC model setup. also setup to simulate model predictions given priors
-
-?pretrain_rnn_with_heli_v5.py - most recent pretraining of RNN
-
 behav_figures.py - various behav figures for individual and batch_data
-
-utils.py - calcs for PYMC model setup, unpickle state vector, filter to exclude models based on performance
-
+code_figures_behaviour.py - outdated behav fig
+compile.py - compiles the state data from multiple .npz files into a single .pickle file.
+fixed_point_analysis.py - calcs for fixed points and PCA to plot into 2d space
 get_behavior.py - runs trained models through task to reproduce and save behavior
-
-?compile.py - (can be merged into utils?)
-
-OUT OF DATE / USE? 
-
+nassarfig6.py - reproduces behavioural data from nassar2021
+pretrain_rnn_with_heli_v* - pretrain RNN
+pyem_models.py - sets up bayesian model for fitting
+tasks.py - holds the discrete / continuous helicopter environment. 
+train_rnn_without_heli_server.py - pretrain w/out RNN 
+utils.py - calcs for PYMC model setup, unpickle state vector, filter to exclude models based on performance
 utils.funcs.py - holds generic actor critic model, lr and plotting functions (out of date?)
-analysis.py - contained prev Wang 2018 reproduction, may be out of data now
-code_figures_behaviour - fig 2 Nassar
-behav_figures.py - first ~4 sets of figures that are for one run at a time (maybe keep for paper)
-analyze_normative.py - bayesian model sim and plotting? (out of date? or put elsewhere? )
+
+
+cleanup to-do's
+    Various function rewritten multiple times: 
+        -move get_lrs_v2, get_lrs into utils.py
+        -move get_area into rnn_utils.py
+        -put plot_states, plot_lrs.py into behav_figures.py
+    -move analyze_normative.py into behav_figures.py
+    -pull actorCritic module from rnn_utils.py instead of rewriting in analyze_rnn_fp.py and analyze_rnn
+    -analyze_rnn.py outdated / replaced with analyze_rnn_fp.py? 
+    -separate individual vs batch figures in behav_figures.py or break up to two files
+    -move code_figures_behaviour.py into behav_figures
+    -when / where is compile.py used? 
+    -move previous pretrain_rnn_with_heli versions to defunct folder? 
 
 Workflow 
 
-Setup RNN -> run with param sweep -> get set of models -> analyze behav or fp 
+1) setup RNN with ..
+2) train RNN with ....
+4) filter good models with ...
+5) analyze behav with ...
+    -or fp with ...
 
 Main things used for analysis- 
 
@@ -70,9 +79,3 @@ Trained model weight paths -
     "scale": (
         scales,
         "*_V3_0.95g_0.0rm_100bz_0.0td_{val}tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
-
-
-
-#to-do 
-clean up how data is saved / separate figures from running model
-softcode actions to responses in task

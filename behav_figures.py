@@ -164,7 +164,7 @@ def plot_lr_after_hazard(learning_rate, hazard_distance, condition="change-point
     plt.savefig(f'plots/interactions_line_graph_{condition}.png')
 
 #% v2 plots - modified to work from batch_data
-def get_lrs_v2(states, threshold=0):
+def get_lrs_v3(states, threshold=0):
     '''
     -takes in state vector
     -threshold is the cutoff for prediction error to be considered a learning rate
@@ -233,7 +233,7 @@ def plot_lrs(states, scale=0.1):
     plt.tight_layout()
     return pess, lrss, area
 
-def plot_lrs_v2_batch(behav_dict, scale=0.1):
+def plot_lrs_v3_batch(behav_dict, scale=0.1):
     """
     Modified to include error bars and confidence intervals for averaged data across all runs.
     """
@@ -463,6 +463,7 @@ def plot_lr_curve_post_hazard(behav_data):
             plt.show()
 
 
+#move to calcs
 def compute_update_ratios(lrs):
     """
     Compute the proportion of non-updates and moderate updates.
@@ -605,11 +606,116 @@ def plot_all_update_ratios(behav_dict, hazard_distance_filter=None):
     fig.tight_layout()
     plt.show()
 
+def plot_param_area(param, areas, xlabel, validms, logx=False, legend=False):
+
+    utils_data.saveload(f'./analysis/{xlabel}_area',[param, areas], 'save')
+
+    labels = ['CP', 'OB']
+    colors= ['orange', 'brown']
+
+    plt.figure(figsize=(3,2.5))
+    for c in range(2):
+        m,s = utils_calcs.get_mean_ci(areas[:,:,c],validms)
+
+        plt.plot(param, m, label=labels[c], color=colors[c])
+        plt.fill_between(x=param, y1=m-s, y2=m+s, alpha=0.2, color=colors[c])
+
+    dfarea = areas[:,:,0] - areas[:,:,1]
+    m,s = utils_calcs.get_mean_ci(dfarea,validms)
+    e = areas.shape[0]
+    plt.plot(param, m, label='CP-OB', color='k', linewidth=2)
+    plt.fill_between(x=param, y1=m-s, y2=m+s, alpha=0.2, color='k')
+    plt.xlabel(xlabel)
+    if legend:
+        plt.legend()
+    plt.ylabel('$A$')
+    if logx:
+        plt.xscale('log')
+    
+    plt.tight_layout()
+    plt.savefig(f'./analysis/{xlabel}_area_{e}e.png')
+    plt.savefig(f'./analysis/{xlabel}_area_{e}e.svg')
+
+def plot_param_area_v2(behav_dict):
+    """
+    Repeat plot_param_area using the behav_dict data structure.
+    Create 4 subplots (one for each RNN parameter) to display area differences for CP and OB.
+    """
+    import matplotlib.pyplot as plt
+
+    # Create a figure with 4 subplots (2 rows x 2 columns)
+    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+    axs = axs.flatten()
+
+    # Loop over each RNN parameter in the behavior dictionary with index.
+    for idx, (rnn_param, data) in enumerate(behav_dict.items()):
+        ax = axs[idx]
+        model_list = data['model_list']
+
+        # Group run indices by hyperparameter value
+        groups = {}
+        for key, param_list in model_list.items():
+            hp_val = next((x for x in param_list if isinstance(x, (int, float))), None)
+            if hp_val is None:
+                continue
+            run_id = key[0]
+            groups.setdefault(hp_val, []).append(run_id)
+
+        # Sort hyperparameter values for plotting
+        hp_vals = np.array(sorted(groups.keys()))
+        cp_means, cp_cis = [], []
+        ob_means, ob_cis = [], []
+
+        # For each unique hyperparameter value, compute the mean area and confidence interval
+        for hp in hp_vals:
+            runs = groups[hp]
+            cp_areas = np.array([data['area_cp'][run] for run in runs])
+            ob_areas = np.array([data['area_ob'][run] for run in runs])
+            import scipy.stats as stats
+            n_cp = len(cp_areas)
+            m_cp = np.mean(cp_areas)
+            sem_cp = np.std(cp_areas, ddof=1) / np.sqrt(n_cp) if n_cp > 1 else 0
+            ci_cp = stats.t.ppf(0.975, df=n_cp-1) * sem_cp if n_cp > 1 else 0
+
+            n_ob = len(ob_areas)
+            m_ob = np.mean(ob_areas)
+            sem_ob = np.std(ob_areas, ddof=1) / np.sqrt(n_ob) if n_ob > 1 else 0
+            ci_ob = stats.t.ppf(0.975, df=n_ob-1) * sem_ob if n_ob > 1 else 0
+            cp_means.append(m_cp)
+            cp_cis.append(ci_cp)
+            ob_means.append(m_ob)
+            ob_cis.append(ci_ob)
+
+        cp_means = np.array(cp_means)
+        cp_cis = np.array(cp_cis)
+        ob_means = np.array(ob_means)
+        ob_cis = np.array(ob_cis)
+
+        # Plot CP and OB area curves with confidence intervals on the current axis.
+        ax.errorbar(hp_vals, cp_means, yerr=cp_cis, fmt='-o', color='orange', label='CP')
+        ax.errorbar(hp_vals, ob_means, yerr=ob_cis, fmt='-o', color='brown', label='OB')
+
+        # Compute difference between CP and OB and propagate error (assuming independence)
+        diff = cp_means - ob_means
+        diff_ci = np.sqrt(cp_cis**2 + ob_cis**2)
+        ax.errorbar(hp_vals, diff, yerr=diff_ci, fmt='-o', color='k', linewidth=2, label='CP-OB')
+
+        ax.set_xlabel(rnn_param)
+        ax.set_ylabel('Area')
+        ax.legend()
+        ax.grid(True)
+
+    fig.tight_layout()
+    plt.savefig('./analysis/all_params_area.png')
+    plt.savefig('./analysis/all_params_area.svg')
+    plt.show()
+
 # %% Setup data from get_behavior.py
 
-import utils as utils
+import utils_calcs, utils_data
 from scipy.ndimage import uniform_filter1d
 import numpy as np
+import utils_calcs
 
 def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_list = ["gamma", "preset", "rollout", "scale"]):
     '''
@@ -628,7 +734,7 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_lis
     '''
     results = {}
     for rnn_param in RNN_param_list:
-        cp_array, ob_array, model_list = utils.unpickle_state_vector(file_dir = file_dir, RNN_param=rnn_param)
+        cp_array, ob_array, model_list = utils_data.unpickle_state_vector(file_dir = file_dir, RNN_param=rnn_param)
 
 
         #filter model_list here
@@ -637,8 +743,8 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_lis
 
 
         if len(cp_array[0]) == 5: # 5 state variables
-            pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[get_lrs_v2(cp_array[i]) for i in range(len(model_list))])
-            pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[get_lrs_v2(ob_array[i]) for i in range(len(model_list))])
+            pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[get_lrs_v3(cp_array[i]) for i in range(len(model_list))])
+            pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[get_lrs_v3(ob_array[i]) for i in range(len(model_list))])
 
             results[rnn_param] = {
                 'cp_array': cp_array,
@@ -657,8 +763,8 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_lis
             }
         elif len(cp_array[0]) == 30: #30 epochs 
             for epoch in range(len(cp_array[0])):
-                pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[get_lrs_v2(cp_array[i]) for i in range(len(model_list))])
-                pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[get_lrs_v2(ob_array[i]) for i in range(len(model_list))])
+                pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[get_lrs_v3(cp_array[i][epoch]) for i in range(len(model_list))])
+                pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[get_lrs_v3(ob_array[i][epoch]) for i in range(len(model_list))])
 
                 results[rnn_param, epoch] = {
                     'cp_array': cp_array,
@@ -680,12 +786,15 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_lis
 
 # behav_dict = get_batch_behav(file_dir='data/rnn_behav/model_params_101000/30_epochs')
 behav_dict = get_batch_behav()
-plot_lrs_v2_batch(behav_dict, scale=0.1)
-plot_lr_bins_post_hazard_batch(behav_dict)
-plot_lr_curve_post_hazard(behav_dict)
-plot_update_ratio(behav_dict)
-plot_all_update_ratios(behav_dict)
-plot_all_update_ratios(behav_dict, hazard_distance_filter= [1,3])
+# plot_lrs_v3_batch(behav_dict, scale=0.1)
+# plot_lr_bins_post_hazard_batch(behav_dict)
+# plot_lr_curve_post_hazard(behav_dict)
+# plot_update_ratio(behav_dict)
+# plot_all_update_ratios(behav_dict)
+# plot_all_update_ratios(behav_dict, hazard_distance_filter= [1,3])
+
+plot_param_area_v2(behav_dict)
+
 
 #%% Run analysis on data
 

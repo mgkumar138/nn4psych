@@ -1,6 +1,8 @@
+
+'''Nassar et al. 2021 - Figure 6
 #replicate Nassar2021 fig6a with RNN's behav model fits
 #get human model fits for area between curves
-
+'''
 #%% setup data
 
 import scipy.io as sio

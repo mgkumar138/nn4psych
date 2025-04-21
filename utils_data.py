@@ -36,124 +36,6 @@ def extract_states(states):
         current += 1
     return prediction_error, update, learning_rate, true_state, predicted_state,hazard_distance, hazard_trials
 
-def calculate_normative_update(alpha, delta):
-    """
-    Equation 1: Calculate normative update.
-    
-    Parameters:
-        alpha (float): Learning rate.
-        delta (float): Prediction error.
-        t (int): Current time step.
-    
-    Returns:
-        float: Normative update value.
-    
-    Equation:
-        normative_update[t] = alpha[t] * delta[t]
-    """
-    return alpha * delta
-
-def calculate_alpha_changepoint(omega, tau):
-    """
-    Equation 2: Calculate alpha for changepoint model.
-    
-    Parameters:
-        omega (float): Changepoint probability.
-        tau (float): Relative uncertainty.
-        t (int): Current time step.
-    
-    Returns:
-        float: Updated alpha value.
-    
-    Equation:
-        alpha[t] = omega + tau - (omega * tau)
-    """
-    return omega + tau - (omega * tau)
-
-def calculate_alpha_oddball(tau, omega):
-    """
-    Equation 3: Calculate alpha for oddball model.
-    
-    Parameters:
-        tau (float): Relative uncertainty.
-        omega (float): Changepoint probability.
-    
-    Returns:
-        float: Updated alpha value.
-    
-    Equation:
-        alpha[t] = tau - (tau * omega)
-    """
-    return tau - (tau * omega)
-
-def calculate_omega(H, U_val, N_val):
-    """
-    Equation 4: Calculate updated omega.
-    
-    Parameters:
-        H (float): Probability depending on the condition.
-        U_val (float): Uniform PDF value raised to the likelihood weight.
-        N_val (float): Normal PDF value raised to the likelihood weight.
-    
-    Returns:
-        float: Updated omega value.
-    
-    Equation:
-        omega = (H * U_val) / (H * U_val + (1 - H) * N_val)
-    """
-    return (H * U_val) / (H * U_val + (1 - H) * N_val)
-
-def calculate_tau(tau, UU):
-    """
-    Equation 5: Update tau based on uncertainty underestimation.
-    
-    Parameters:
-        tau (float): Relative uncertainty.
-        UU (float): Uncertainty underestimation.
-    
-    Returns:
-        float: Updated tau value.
-    
-    Equation:
-        tau = tau / UU
-    """
-    return tau / UU
-
-def calculate_L_normative(participant_update, normative_update, sigma_update):
-    """
-    Equation 6: Calculate normative likelihood.
-    
-    Parameters:
-        participant_update (numpy.ndarray): Participant's update data.
-        normative_update (float): Normative update value.
-        sigma_update (float): Updated sigma value.
-        t (int): Current time step.
-    
-    Returns:
-        float: Log-normalized likelihood.
-    
-    Equation:
-        L_normative = stats.norm.pdf(participant_update[t], loc=normative_update[t], scale=sigma_update)
-    """
-    return stats.norm.pdf(participant_update, loc=normative_update, scale=sigma_update)
-
-def calculate_sigma_update(sigma_motor, normative_update, sigma_LR):
-    """
-    Equation 7: Calculate variability of update.
-    
-    Parameters:
-        sigma_motor (float): Motor sigma value.
-        normative_update (float): Normative update value.
-        sigma_LR (float): Learning rate sigma value.
-        t (int): Current time step.
-    
-    Returns:
-        float: Updated sigma value.
-    
-    Equation:
-        sigma_update = sigma_motor + normative_update[t] * sigma_LR
-    """
-    return sigma_motor + normative_update * sigma_LR
 
 def unpickle_state_vector(file_dir:str = "data/rnn_behav/model_params_101000/", RNN_param: str="None"):
     """
@@ -238,3 +120,14 @@ def filter_data(data_dir = "./model_params_101000/", threshold = 10):
                 scale_idx[val] = idx
 
     return gamma_idx, rollout_idx, preset_idx, scale_idx
+
+def saveload(filename, variable, opt):
+    import pickle
+    if opt == 'save':
+        with open(f"{filename}.pickle", "wb") as file:
+            pickle.dump(variable, file)
+        print('file saved')
+    else:
+        with open(f"{filename}.pickle", "rb") as file:
+            return pickle.load(file)
+

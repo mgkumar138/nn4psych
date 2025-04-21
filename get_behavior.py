@@ -2,7 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from utils_funcs import ActorCritic
+import utils_data, utils_calcs, ref_info
 import torch
 from tasks import PIE_CP_OB_v2
 from torch.distributions import Categorical
@@ -12,75 +12,22 @@ import os
 import pickle
 
 
-
-def get_area(model_path, epochs=100, reset_memory=0.0):
-    hidden_dim = 64
-    trials = 200
-
-    model = ActorCritic(9, hidden_dim, 3)
-    model.load_state_dict(torch.load(model_path))
-
-    # print(f'Load Model {model_path}')
-    contexts = ["change-point","oddball"] #"change-point","oddball"
-
-    all_states = np.zeros([epochs, 2, 5, trials])
-    for epoch in range(epochs):
-        for tt, context in enumerate(contexts):
-            env = PIE_CP_OB_v2(condition=context, max_time=300, total_trials=trials, 
-                    train_cond=False, max_displacement=10, reward_size=2)
-            
-            hx = torch.randn(1, 1, hidden_dim) * 1/hidden_dim**0.5
-            for trial in range(trials):
-
-                next_obs, done = env.reset()
-                norm_next_obs = env.normalize_states(next_obs)
-                next_state = np.concatenate([norm_next_obs, env.context, np.array([0.0])])
-                next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
-
-                hx = hx.detach()
-                # if trial_counter % reset_memory == 0:
-                # if np.random.random_sample()< reset_memory:
-                #     hx += (torch.randn(1, 1, hidden_dim) * 1/hidden_dim**0.5)
-
-                while not done:
-
-                    if np.random.random_sample()< reset_memory:
-                        hx = (torch.randn(1, 1, hidden_dim) * 1/hidden_dim**0.5)
-
-                    actor_logits, critic_value, hx = model(next_state, hx)
-                    probs = Categorical(logits=actor_logits)
-                    action = probs.sample()
-
-                    # Take action and observe reward
-                    next_obs, reward, done = env.step(action.item())
-
-                    # Prep next state
-                    norm_next_obs = env.normalize_states(next_obs)
-                    next_state = np.concatenate([norm_next_obs, env.context, np.array([reward])])
-                    next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
-
-            all_states[epoch, tt] = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])
-
-
-    return np.array(all_states)
-
-
 analysis = 'all'
 epochs = 30 #different format if more than 1 epoch (need to standardize this later)
 #current format was made for pyem, but only saves 1st epoch
 
-data_dir = "./model_params_101000/"
-save_dir = "data/rnn_behav/model_params_101000/30_epochs/"
+data_dir, ref_info = ref_info.ref_info(version = "V3")
+save_dir = "data/rnn_behav/model_params_101000/30_epochs/" 
 os.makedirs(save_dir, exist_ok=True)
-bias = False
 
-#Model performance threshold 
+bias = False
 
 
 if analysis == 'gamma' or analysis == "all":
     # influence of gamma
 
-    gammas = [0.99, 0.95, 0.9, 0.8, 0.7, 0.5, 0.25, 0.1] # 0.99,0.95, 0.9,0.8,0.7, 0.5, 0.25, 0.1
+    gammas = ref_info['gammas'] # 0.99,0.95, 0.9,0.8,0.7, 0.5, 0.25, 0.1
+    # gammas = [0.99, 0.95, 0.9, 0.8, 0.7, 0.5, 0.25, 0.1] # 0.99,0.95, 0.9,0.8,0.7, 0.5, 0.25, 0.1
     all_param_states = {'gammas':gammas,'states':[]}
 
     gamma_dict = {}
@@ -90,7 +37,9 @@ if analysis == 'gamma' or analysis == "all":
     
     for g, gamma in enumerate(gammas):
         
-        file_names= data_dir+f"*_V3_{gamma}g_0.0rm_100bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
+        file_names = data_dir + ref_info['gamma']['file_pattern']
+
+        # file_names= data_dir+f"*_V3_{gamma}g_0.0rm_100bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
         models = glob.glob(file_names)
         models = [f for f in models if float(f.split("\\")[-1].split("_")[0]) > 5] # remove items in file_names that begin with "-"
 
@@ -98,7 +47,7 @@ if analysis == 'gamma' or analysis == "all":
 
         for m, model in enumerate(models):
             
-            all_states = get_area(model, epochs=epochs)
+            all_states = utils_calcs.get_area(model, epochs=epochs)
             all_param_states['states'].append(all_states)
 
             gamma_dict[m, g] = {"gamma", gamma}
