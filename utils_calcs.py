@@ -128,43 +128,6 @@ def calculate_sigma_update(sigma_motor, normative_update, sigma_LR):
     """
     return sigma_motor + normative_update * sigma_LR
 
-class ActorCritic(nn.Module):
-    def __init__(self, input_dim, hidden_dim, action_dim, gain=1.5, noise=0.0, bias=False):
-        super(ActorCritic, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.gain = gain
-        self.noise = noise  # Include the noise variance as an argument
-        self.rnn = nn.RNN(input_dim, hidden_dim, batch_first=True, nonlinearity='tanh',bias=bias)
-        self.actor = nn.Linear(hidden_dim, action_dim,bias=bias)
-        self.critic = nn.Linear(hidden_dim, 1,bias=bias)
-        self.init_weights()
-
-    def init_weights(self):
-        for name, param in self.rnn.named_parameters():
-            if 'weight_ih' in name:
-                init.normal_(param, mean=0, std=1/(self.input_dim**0.5))
-            elif 'weight_hh' in name:
-                init.normal_(param, mean=0, std=self.gain / self.hidden_dim**0.5)
-            elif 'bias_ih' in name or 'bias_hh' in name:
-                init.constant_(param, 0)
-
-        for layer in [self.actor, self.critic]:
-            for name, param in layer.named_parameters():
-                if 'weight' in name:
-                    init.normal_(param, mean=0, std=1/self.hidden_dim)
-                elif 'bias' in name:
-                    init.constant_(param, 0)
-
-    def forward(self, x, hx):
-        r, h = self.rnn(x, hx)
-        r = r.squeeze(1)
-        critic_value = self.critic(r)
-
-        return self.actor(r), critic_value, h
-
-
-
 def get_lrs_analyze_hyperparams(states):
     epochs = states.shape[0]
     pess, lrss, area = [],[], []
@@ -186,7 +149,6 @@ def get_lrs_analyze_hyperparams(states):
         lrss.append(learning_rate_sorted)
         area.append(np.trapz(learning_rate_sorted, prediction_error_sorted))
     return area, pess, lrss
-
 
 
 def get_lrs_v2_analyze_hyperparams(states, threshold=20):
@@ -214,11 +176,6 @@ def get_lrs_v2_analyze_hyperparams(states, threshold=20):
     learning_rate_sorted = lrs[sorted_indices]
 
     return prediction_error_sorted, learning_rate_sorted
-
-
-
-
-
 
 
 def get_lrs(states):
@@ -261,6 +218,39 @@ def get_lrs_v2(states, threshold=20):
 
     return pad_pes, pad_lrs
 
+def get_lrs_v3(states, threshold=0):
+    '''
+    -takes in state vector
+    -threshold is the cutoff for prediction error to be considered a learning rate
+    -returns prediction error and learning rate sorted by prediction error
+    '''
+    true_state = states[2]  # bag position
+    predicted_state = states[1]  # bucket position
+    prediction_error = abs((true_state - predicted_state)[:-1])
+    update = np.diff(predicted_state)
+
+    #index 1 - nonzero division check
+    # idx = prediction_error != 0
+    # prediction_error = prediction_error[idx]
+    # update = update[idx]
+    # learning_rate = abs(update / prediction_error)
+    #option 2 - just clip the prediction error to avoid division by zero
+    prediction_error = np.clip(prediction_error, 1, None)
+    learning_rate = abs(update / prediction_error)
+
+    #index 2- pe threshold
+    idx = prediction_error >= threshold
+    pes = prediction_error[idx]
+    lrs = np.clip(learning_rate, 0, 1)[idx]
+    #sort for easy plotting
+    sorted_indices = np.argsort(pes)
+    prediction_error_sorted = pes[sorted_indices]
+    learning_rate_sorted = lrs[sorted_indices]
+
+    area = np.trapz(learning_rate_sorted, prediction_error_sorted)
+
+    return prediction_error_sorted, learning_rate_sorted, pes, lrs, area
+
 def get_mean_ci(x, valididx):
     m = []
     s = []
@@ -273,64 +263,20 @@ def get_mean_ci(x, valididx):
     s = np.array(s)
     return m, s
 
+def compute_update_ratios(lrs):
+    """
+    Compute the proportion of non-updates and moderate updates.
+    Non-update: lr < 0.1, Moderate update: 0.1 <= lr < 0.9.
+    """
+    if len(lrs) == 0:
+        return 0, 0
+    p_non = np.mean(lrs < 0.1)
+    p_med = np.mean((lrs >= 0.1) & (lrs < 0.9))
+    p_total = np.mean(lrs >= 0.9)
+    return p_med, p_non, p_total
 
-def plot_behavior(states, context,epoch, ax=None):
-    if ax is None:
-        plt.figure(figsize=(10, 6))
-    trials, bucket_positions, bag_positions, helicopter_positions, hazard_triggers = states
-    # plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
-    plt.plot(trials, bag_positions, label='Bag', color='red', marker='o', linestyle='-.', alpha=0.5, ms=2)
-    plt.plot(trials, helicopter_positions, label='Heli', color='green', linestyle='--',ms=2)
-    plt.plot(trials, bucket_positions, label='Bucket', color='b',marker='o', linestyle='-.', alpha=0.5,ms=2)
 
-    plt.ylim(-10, 310)  # Set y-axis limit from 0 to 300
-    plt.xlabel('Trial')
-    plt.ylabel('Position')
-    plt.title(f"{context}, E:{epoch}")
-    plt.legend(fontsize=6)
 
-def get_area(model_path, epochs=100, reset_memory=0.0):
-    hidden_dim = 64
-    trials = 200
 
-    model = ActorCritic(9, hidden_dim, 3)
-    model.load_state_dict(torch.load(model_path))
-
-    contexts = ["change-point", "oddball"]
-
-    all_states = np.zeros([epochs, 2, 5, trials])
-    for epoch in range(epochs):
-        for tt, context in enumerate(contexts):
-            env = PIE_CP_OB_v2(condition=context, max_time=300, total_trials=trials, 
-                               train_cond=False, max_displacement=10, reward_size=2)
-
-            hx = torch.randn(1, 1, hidden_dim) * 1 / hidden_dim**0.5
-            for trial in range(trials):
-
-                next_obs, done = env.reset()
-                norm_next_obs = env.normalize_states(next_obs)
-                next_state = np.concatenate([norm_next_obs, env.context, np.array([0.0])])
-                next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
-
-                hx = hx.detach()
-
-                while not done:
-
-                    if np.random.random_sample() < reset_memory:
-                        hx = (torch.randn(1, 1, hidden_dim) * 1 / hidden_dim**0.5)
-
-                    actor_logits, critic_value, hx = model(next_state, hx)
-                    probs = Categorical(logits=actor_logits)
-                    action = probs.sample()
-
-                    next_obs, reward, done = env.step(action.item())
-
-                    norm_next_obs = env.normalize_states(next_obs)
-                    next_state = np.concatenate([norm_next_obs, env.context, np.array([reward])])
-                    next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
-
-            all_states[epoch, tt] = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])
-
-    return all_states
 
 

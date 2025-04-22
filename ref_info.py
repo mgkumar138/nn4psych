@@ -10,8 +10,7 @@ storage for data_dir, parameter info
 
 def ref_info(version:str = None):
     """
-    # Define the reference information for each parameter
-    # Returns a dictionary with values and file pattern for the specified parameter
+    - Returns a dictionary with values and file pattern for the specified parameter
     -depends on the different versions (seems like 3 and 5 right now)
     """
     if version == "V3":
@@ -60,9 +59,37 @@ def ref_info(version:str = None):
     
     return data_dir, ref_info_dict
 
+def task_info(version:str = None):
+    """
+    - Returns a dictionary with values necessary to run the task
+    """
+    task_info_dict = {
+        "contexts": ["change-point", "oddball"],
+        "num_contexts": 2,
+        "train_cond": False,
+        "reward_size": 5,
+        "max_displacement": 10,
+        "max_time": 300,
+        "n_trials": 200,
+        "epochs": 100,
+        "input_dim": 6 + 3,  # set this based on your observation space. observation vector is length 4 [helicopter pos, bucket pos, bag pos, bag-bucket pos], context vector is length 2.
+        "hidden_dim": 64,  # size of RNN
+        "action_dim": 3,  # set this based on your action space. 0 is left, 1 is right, 2 is confirm.
+    }
+    return task_info_dict   
 
-#from analyze_hyperparams originally 
+def get_rnn_ref_info(version:str = None):
+    '''
+    Returns model_dir for trained RNN (this is used in the specific case for analyze_rnn.py at the moment?)
+    '''
+    if version == "V3":
+        gamma = 0.95
+        tds = 0.25
+        prm = 0.0
+        troll = 100
+        idx = -3
+        
 
-data_dir = "./model_params_2/"
-bias = False
+        models = f"./model_params_101000/*_V3_{gamma}g_{prm}rm_{troll}bz_0.0td_{tds}tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
 
+    return model_dir

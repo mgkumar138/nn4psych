@@ -7,31 +7,6 @@ from scipy.stats import linregress
 from scipy.ndimage import uniform_filter1d
 import scipy.stats as stats
 
-#out of date - use get_area in get_behavior.py to get data
-#or run for loop in analyze_rnn with set weights to get data
-# def extract_states(states):
-#     # originally by Adam
-#     # Extract prediction error (PE) and state (s) and predicted state (s_hat)
-#     true_state = states[2]  # bag position
-#     predicted_state = states[1]  # bucket position
-#     prediction_error = abs(true_state - predicted_state)
-#     prediction_error = np.minimum(prediction_error, 100)
-#     prediction_error = prediction_error[:-1] 
-
-#     update = abs(np.diff(predicted_state))
-#     learning_rate = np.where(prediction_error != 0, update / prediction_error, 0)
-
-#     hazard_trials = states[4]
-#     hazard_indexes = np.where(states[4] == 1)[0]
-#     hazard_distance = np.zeros(len(states[0]), dtype=int)
-#     current = 0
-#     for i in range(len(states[0])):
-#         if i in hazard_indexes:
-#             current = 0
-#         hazard_distance[i] = current
-#         current += 1
-#     return prediction_error, update, learning_rate, true_state, predicted_state,hazard_distance, hazard_trials
-
 #v1 plots - largely out of usage
 
 def plot_update_by_prediction_error(prediction_error, update, condition="change-point"):
@@ -163,40 +138,27 @@ def plot_lr_after_hazard(learning_rate, hazard_distance, condition="change-point
     plt.show()
     plt.savefig(f'plots/interactions_line_graph_{condition}.png')
 
-#% v2 plots - modified to work from batch_data
-def get_lrs_v3(states, threshold=0):
-    '''
-    -takes in state vector
-    -threshold is the cutoff for prediction error to be considered a learning rate
-    -returns prediction error and learning rate sorted by prediction error
-    '''
-    true_state = states[2]  # bag position
-    predicted_state = states[1]  # bucket position
-    prediction_error = abs((true_state - predicted_state)[:-1])
-    update = np.diff(predicted_state)
+#% v2 plots - taken from other scripts, mostly single epoch data
 
-    #index 1 - nonzero division check
-    # idx = prediction_error != 0
-    # prediction_error = prediction_error[idx]
-    # update = update[idx]
-    # learning_rate = abs(update / prediction_error)
-    #option 2 - just clip the prediction error to avoid division by zero
-    prediction_error = np.clip(prediction_error, 1, None)
-    learning_rate = abs(update / prediction_error)
+def plot_states(states):
+    contexts = ["Change-point","Oddball"]
+    for c, context in enumerate(contexts):
+        [trials, bucket_positions, bag_positions, helicopter_positions, hazard_triggers] = states[c]
 
-    #index 2- pe threshold
-    idx = prediction_error >= threshold
-    pes = prediction_error[idx]
-    lrs = np.clip(learning_rate, 0, 1)[idx]
-    #sort for easy plotting
-    sorted_indices = np.argsort(pes)
-    prediction_error_sorted = pes[sorted_indices]
-    learning_rate_sorted = lrs[sorted_indices]
+        plt.figure(figsize=(4, 2.5))
+        # plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
+        plt.scatter(trials, bag_positions, label='Bag Position', color='red', marker='o', linestyle='-.', alpha=1, edgecolors='k')
+        plt.plot(trials, helicopter_positions, label='Helicopter', color='green', linewidth=3)
+        plt.plot(trials, bucket_positions, label='Bucket Position', color='orange', alpha=1, linewidth=3)
 
-    area = np.trapz(learning_rate_sorted, prediction_error_sorted)
-
-    return prediction_error_sorted, learning_rate_sorted, pes, lrs, area
-
+        plt.ylim(-10, 310)  # Set y-axis limit from 0 to 300
+        plt.xlabel('Trial')
+        plt.ylabel('Position')
+        plt.title(f"{context}\n$\gamma={gamma}, \\beta_\delta={tds}, p_{{reset}}={prm}, t_{{rollout}}={troll}$")
+        plt.legend(frameon=True, fontsize=8)
+        plt.tight_layout()
+        plt.savefig(f'./analysis/{context}_states.png')
+        plt.savefig(f'./analysis/{context}_states.svg')
 
 def plot_lrs(states, scale=0.1):
     epochs = states.shape[0]
@@ -204,7 +166,7 @@ def plot_lrs(states, scale=0.1):
     for c in range(2):
         pes, lrs = [], []
         for e in range(epochs):
-            pe, lr = get_lrs_v2(states[e, c])
+            pe, lr = utils_calcs.get_lrs_v2(states[e, c])
 
             pes.append(pe)
             lrs.append(lr)
@@ -232,6 +194,23 @@ def plot_lrs(states, scale=0.1):
     plt.title(f'CB={area[0]:.1f}, OB={area[1]:.1f}, A={(area[0] - area[1]):.1f}')
     plt.tight_layout()
     return pess, lrss, area
+
+def plot_behavior(states, context,epoch, ax=None):
+    if ax is None:
+        plt.figure(figsize=(10, 6))
+    trials, bucket_positions, bag_positions, helicopter_positions, hazard_triggers = states
+    # plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
+    plt.plot(trials, bag_positions, label='Bag', color='red', marker='o', linestyle='-.', alpha=0.5, ms=2)
+    plt.plot(trials, helicopter_positions, label='Heli', color='green', linestyle='--',ms=2)
+    plt.plot(trials, bucket_positions, label='Bucket', color='b',marker='o', linestyle='-.', alpha=0.5,ms=2)
+
+    plt.ylim(-10, 310)  # Set y-axis limit from 0 to 300
+    plt.xlabel('Trial')
+    plt.ylabel('Position')
+    plt.title(f"{context}, E:{epoch}")
+    plt.legend(fontsize=6)
+
+#% v3 plots - modified to use averaged batch_data
 
 def plot_lrs_v3_batch(behav_dict, scale=0.1):
     """
@@ -462,20 +441,6 @@ def plot_lr_curve_post_hazard(behav_data):
             plt.tight_layout(rect=[0, 0, 1, 0.96])
             plt.show()
 
-
-#move to calcs
-def compute_update_ratios(lrs):
-    """
-    Compute the proportion of non-updates and moderate updates.
-    Non-update: lr < 0.1, Moderate update: 0.1 <= lr < 0.9.
-    """
-    if len(lrs) == 0:
-        return 0, 0
-    p_non = np.mean(lrs < 0.1)
-    p_med = np.mean((lrs >= 0.1) & (lrs < 0.9))
-    p_total = np.mean(lrs >= 0.9)
-    return p_med, p_non, p_total
-
 def plot_update_ratio(behav_data):
     """
     nassar2021 fig3 k/l
@@ -517,7 +482,7 @@ def plot_update_ratio(behav_data):
                 # Aggregate unsorted learning rates for the condition across runs
                 lr_list = [data[f'lr_unsorted_{cond}'][run] for run in runs]
                 lr_all = np.concatenate(lr_list)
-                p_med, p_non, p_total = compute_update_ratios(lr_all)
+                p_med, p_non, p_total = utils_calcs.compute_update_ratios(lr_all)
                 ax.scatter(p_med, p_non, s=100, color=cmap(norm(hp)), label=f'{hp:.2f}')
             ax.set_xlim(0, 1)
             ax.set_ylim(0, 1)
@@ -533,7 +498,6 @@ def plot_update_ratio(behav_data):
     
     plt.tight_layout()
     plt.show()
-
 
 def plot_all_update_ratios(behav_dict, hazard_distance_filter=None):
     '''
@@ -583,7 +547,7 @@ def plot_all_update_ratios(behav_dict, hazard_distance_filter=None):
                     lr_all = lr_all[mask]
 
                 # Use compute_update_ratios to calculate proportions
-                p_mod, p_non, p_total = compute_update_ratios(lr_all)
+                p_mod, p_non, p_total = utils_calcs.compute_update_ratios(lr_all)
                 ax.scatter(p_total, p_mod, p_non, s=150, alpha=0.8, color=cmap(norm(hp)), label=f'{hp:.2f}')
 
             # Add colorbar for hyperparameter values
@@ -710,12 +674,13 @@ def plot_param_area_v2(behav_dict):
     plt.savefig('./analysis/all_params_area.svg')
     plt.show()
 
-# %% Setup data from get_behavior.py
+# %% Organize batch_data
 
 import utils_calcs, utils_data
 from scipy.ndimage import uniform_filter1d
 import numpy as np
 import utils_calcs
+import matplotlib.pyplot as plt
 
 def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_list = ["gamma", "preset", "rollout", "scale"]):
     '''
@@ -743,8 +708,8 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_lis
 
 
         if len(cp_array[0]) == 5: # 5 state variables
-            pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[get_lrs_v3(cp_array[i]) for i in range(len(model_list))])
-            pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[get_lrs_v3(ob_array[i]) for i in range(len(model_list))])
+            pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[utils_calcs.get_lrs_v3(cp_array[i]) for i in range(len(model_list))])
+            pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[utils_calcs.get_lrs_v3(ob_array[i]) for i in range(len(model_list))])
 
             results[rnn_param] = {
                 'cp_array': cp_array,
@@ -786,17 +751,17 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', RNN_param_lis
 
 # behav_dict = get_batch_behav(file_dir='data/rnn_behav/model_params_101000/30_epochs')
 behav_dict = get_batch_behav()
+
 # plot_lrs_v3_batch(behav_dict, scale=0.1)
 # plot_lr_bins_post_hazard_batch(behav_dict)
 # plot_lr_curve_post_hazard(behav_dict)
 # plot_update_ratio(behav_dict)
 # plot_all_update_ratios(behav_dict)
 # plot_all_update_ratios(behav_dict, hazard_distance_filter= [1,3])
-
 plot_param_area_v2(behav_dict)
 
 
-#%% Run analysis on data
+#%% V1 plots - out of date
 
 # if __name__ == "__main__":
     #out of date

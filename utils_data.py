@@ -37,6 +37,7 @@ def extract_states(states):
     return prediction_error, update, learning_rate, true_state, predicted_state,hazard_distance, hazard_trials
 
 
+
 def unpickle_state_vector(file_dir:str = "data/rnn_behav/model_params_101000/", RNN_param: str="None"):
     """
     Unpickle the state vector made by get_behavior.py.

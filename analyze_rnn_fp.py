@@ -7,7 +7,7 @@ import pickle as pk
 from tasks import PIE_CP_OB_v2
 import matplotlib.pyplot as plt
 from torch.nn import init
-from utils_funcs import get_lrs_v2, saveload, plot_behavior
+import utils_calcs, utils_data, ref_info
 from scipy.stats import linregress
 from scipy.ndimage import uniform_filter1d
 from copy import deepcopy

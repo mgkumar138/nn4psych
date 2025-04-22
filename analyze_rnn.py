@@ -6,11 +6,14 @@ from torch.distributions import Categorical
 from tasks import PIE_CP_OB_v2
 import matplotlib.pyplot as plt
 from torch.nn import init
-from utils_funcs import get_lrs_v2, saveload, plot_behavior, ActorCritic
+import utils_calcs, utils_data, ref_info
 from scipy.stats import linregress
 from scipy.ndimage import uniform_filter1d
 from copy import deepcopy
 import glob
+
+import utils_calcs, utils_data, ref_info
+import behav_figures, rnn_model
 
 
 contexts = ["change-point","oddball"] #"change-point","oddball"
@@ -50,141 +53,148 @@ model = ActorCritic(input_dim, hidden_dim, action_dim, noise=0.0)
 if model_path is not None:
     model.load_state_dict(torch.load(model_path))
     print('Load Model')
+else: 
+    raise FileNotFoundError('Model path not found')
 
 
-all_states = np.zeros([epochs, num_contexts, 5, n_trials])
+# all_states = np.zeros([epochs, num_contexts, 5, n_trials])
 
-# get rnn, actor, critic activity
-for epoch in range(epochs):
-    Hs = []
-    As = []
-    Cs = []
-    Rs = []
-    Os = []
-    for tt, context in enumerate(contexts):
-        env = PIE_CP_OB_v2(condition=context, max_time=max_time, total_trials=n_trials, 
-                train_cond=train_cond, max_displacement=max_displacement, reward_size=reward_size)
+# # get rnn, actor, critic activity
+# for epoch in range(epochs):
+#     Hs = []
+#     As = []
+#     Cs = []
+#     Rs = []
+#     Os = []
+#     for tt, context in enumerate(contexts):
+#         env = PIE_CP_OB_v2(condition=context, max_time=max_time, total_trials=n_trials, 
+#                 train_cond=train_cond, max_displacement=max_displacement, reward_size=reward_size)
         
-        h, a, c, r, o = [],[],[], [], []
-        hx = torch.randn(1, 1, hidden_dim) * 1/hidden_dim
-        for trial in range(n_trials):
+#         h, a, c, r, o = [],[],[], [], []
+#         hx = torch.randn(1, 1, hidden_dim) * 1/hidden_dim
+#         for trial in range(n_trials):
 
-            next_obs, done = env.reset()
-            norm_next_obs = env.normalize_states(next_obs)
-            next_state = np.concatenate([norm_next_obs, env.context, np.array([0.0])])
-            next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
+#             next_obs, done = env.reset()
+#             norm_next_obs = env.normalize_states(next_obs)
+#             next_state = np.concatenate([norm_next_obs, env.context, np.array([0.0])])
+#             next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
 
-            while not done:
+#             while not done:
 
-                if np.random.random_sample()< prm:
-                    hx = (torch.randn(1, 1, hidden_dim) * 1/hidden_dim)
+#                 if np.random.random_sample()< prm:
+#                     hx = (torch.randn(1, 1, hidden_dim) * 1/hidden_dim)
 
-                actor_logits, critic_value, hx = model(next_state, hx)
-                probs = Categorical(logits=actor_logits)
-                action = probs.sample()
+#                 actor_logits, critic_value, hx = model(next_state, hx)
+#                 probs = Categorical(logits=actor_logits)
+#                 action = probs.sample()
 
-                # Take action and observe reward
-                next_obs, reward, done = env.step(action.item())
+#                 # Take action and observe reward
+#                 next_obs, reward, done = env.step(action.item())
 
-                h.append(hx[0,0]), a.append(actor_logits[0]), c.append(critic_value[0]), r.append(reward), o.append(env.hazard_trigger)
+#                 h.append(hx[0,0]), a.append(actor_logits[0]), c.append(critic_value[0]), r.append(reward), o.append(env.hazard_trigger)
 
-                # Prep next state
-                norm_next_obs = env.normalize_states(next_obs)
-                next_state = np.concatenate([norm_next_obs, env.context, np.array([reward])])
-                next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
+#                 # Prep next state
+#                 norm_next_obs = env.normalize_states(next_obs)
+#                 next_state = np.concatenate([norm_next_obs, env.context, np.array([reward])])
+#                 next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
 
-        Hs.append(h), As.append(a), Cs.append(c), Rs.append(r), Os.append(o)
+#         Hs.append(h), As.append(a), Cs.append(c), Rs.append(r), Os.append(o)
 
-        all_states[epoch, tt] = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])
-
-
-
-def get_lrs_v2(states, threshold=20):
-    true_state = states[2]  # bag position
-    predicted_state = states[1]  # bucket position
-    prediction_error = (true_state - predicted_state)[:-1]
-    update = np.diff(predicted_state)
-
-    idx = prediction_error !=0
-    prediction_error= prediction_error[idx]
-    update = update[idx]
-    learning_rate = update / prediction_error
-
-    prediction_error = abs(prediction_error)
-    idx = prediction_error>threshold
-    pes = prediction_error[idx]
-    lrs = np.clip(learning_rate,0,1)[idx]
-
-    sorted_indices = np.argsort(pes)
-    prediction_error_sorted = pes[sorted_indices]
-    learning_rate_sorted = lrs[sorted_indices]
-
-    return prediction_error_sorted, learning_rate_sorted
+#         all_states[epoch, tt] = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])
 
 
-def plot_lrs(states, scale=0.1):
-    epochs = states.shape[0]
-    pess, lrss, area = [],[], []
-    for c in range(2):
-        pes,lrs = [],[]
-        for e in range(epochs):
-            pe, lr = get_lrs_v2(states[e, c])
 
-            pes.append(pe)
-            lrs.append(lr)
 
-        pes = np.concatenate(pes)
-        lrs = np.concatenate(lrs)
-        sorted_indices = np.argsort(pes)
-        prediction_error_sorted = pes[sorted_indices]
-        learning_rate_sorted = lrs[sorted_indices]
+# def get_lrs_v2(states, threshold=20):
+#     true_state = states[2]  # bag position
+#     predicted_state = states[1]  # bucket position
+#     prediction_error = (true_state - predicted_state)[:-1]
+#     update = np.diff(predicted_state)
 
-        pess.append(prediction_error_sorted)
-        lrss.append(learning_rate_sorted)
-        area.append(np.trapz(learning_rate_sorted, prediction_error_sorted))
+#     idx = prediction_error !=0
+#     prediction_error= prediction_error[idx]
+#     update = update[idx]
+#     learning_rate = update / prediction_error
+
+#     prediction_error = abs(prediction_error)
+#     idx = prediction_error>threshold
+#     pes = prediction_error[idx]
+#     lrs = np.clip(learning_rate,0,1)[idx]
+
+#     sorted_indices = np.argsort(pes)
+#     prediction_error_sorted = pes[sorted_indices]
+#     learning_rate_sorted = lrs[sorted_indices]
+
+#     return prediction_error_sorted, learning_rate_sorted
+
+
+# def plot_lrs(states, scale=0.1):
+#     epochs = states.shape[0]
+#     pess, lrss, area = [],[], []
+#     for c in range(2):
+#         pes,lrs = [],[]
+#         for e in range(epochs):
+#             pe, lr = get_lrs_v2(states[e, c])
+
+#             pes.append(pe)
+#             lrs.append(lr)
+
+#         pes = np.concatenate(pes)
+#         lrs = np.concatenate(lrs)
+#         sorted_indices = np.argsort(pes)
+#         prediction_error_sorted = pes[sorted_indices]
+#         learning_rate_sorted = lrs[sorted_indices]
+
+#         pess.append(prediction_error_sorted)
+#         lrss.append(learning_rate_sorted)
+#         area.append(np.trapz(learning_rate_sorted, prediction_error_sorted))
     
 
-    plt.figure(figsize=(3,2.5))
-    colors = ['orange', 'brown']
-    labels = ['CP', 'OB']
-    for i in range(2):
-        window_size = int(len(lrss[i])*scale)
-        smoothed_learning_rate = uniform_filter1d(lrss[i], size=window_size)
-        plt.plot(pess[i], smoothed_learning_rate, color=colors[i], linewidth=2,label=labels[i])
-    plt.legend()
-    plt.xlabel('Prediction error')
-    plt.ylabel('Learning rate')
-    # plt.title(f'CB={area[0]:.1f}, OB={area[1]:.1f}, A={(area[0]-area[1]):.1f}')
-    plt.tight_layout()
-    return pess, lrss, area
+#     plt.figure(figsize=(3,2.5))
+#     colors = ['orange', 'brown']
+#     labels = ['CP', 'OB']
+#     for i in range(2):
+#         window_size = int(len(lrss[i])*scale)
+#         smoothed_learning_rate = uniform_filter1d(lrss[i], size=window_size)
+#         plt.plot(pess[i], smoothed_learning_rate, color=colors[i], linewidth=2,label=labels[i])
+#     plt.legend()
+#     plt.xlabel('Prediction error')
+#     plt.ylabel('Learning rate')
+#     # plt.title(f'CB={area[0]:.1f}, OB={area[1]:.1f}, A={(area[0]-area[1]):.1f}')
+#     plt.tight_layout()
+#     return pess, lrss, area
 
 
-def plot_states(states):
-    contexts = ["Change-point","Oddball"]
-    for c, context in enumerate(contexts):
-        [trials, bucket_positions, bag_positions, helicopter_positions, hazard_triggers] = states[c]
+# def plot_states(states):
+#     contexts = ["Change-point","Oddball"]
+#     for c, context in enumerate(contexts):
+#         [trials, bucket_positions, bag_positions, helicopter_positions, hazard_triggers] = states[c]
 
-        plt.figure(figsize=(4, 2.5))
-        # plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
-        plt.scatter(trials, bag_positions, label='Bag Position', color='red', marker='o', linestyle='-.', alpha=1, edgecolors='k')
-        plt.plot(trials, helicopter_positions, label='Helicopter', color='green', linewidth=3)
-        plt.plot(trials, bucket_positions, label='Bucket Position', color='orange', alpha=1, linewidth=3)
+#         plt.figure(figsize=(4, 2.5))
+#         # plt.plot(self.trials, self.bucket_positions, label='Bucket Position', color='blue')
+#         plt.scatter(trials, bag_positions, label='Bag Position', color='red', marker='o', linestyle='-.', alpha=1, edgecolors='k')
+#         plt.plot(trials, helicopter_positions, label='Helicopter', color='green', linewidth=3)
+#         plt.plot(trials, bucket_positions, label='Bucket Position', color='orange', alpha=1, linewidth=3)
 
-        plt.ylim(-10, 310)  # Set y-axis limit from 0 to 300
-        plt.xlabel('Trial')
-        plt.ylabel('Position')
-        plt.title(f"{context}\n$\gamma={gamma}, \\beta_\delta={tds}, p_{{reset}}={prm}, t_{{rollout}}={troll}$")
-        plt.legend(frameon=True, fontsize=8)
-        plt.tight_layout()
-        plt.savefig(f'./analysis/{context}_states.png')
-        plt.savefig(f'./analysis/{context}_states.svg')
+#         plt.ylim(-10, 310)  # Set y-axis limit from 0 to 300
+#         plt.xlabel('Trial')
+#         plt.ylabel('Position')
+#         plt.title(f"{context}\n$\gamma={gamma}, \\beta_\delta={tds}, p_{{reset}}={prm}, t_{{rollout}}={troll}$")
+#         plt.legend(frameon=True, fontsize=8)
+#         plt.tight_layout()
+#         plt.savefig(f'./analysis/{context}_states.png')
+#         plt.savefig(f'./analysis/{context}_states.svg')
 
 
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-import numpy as np
 
 def plot_combined_state_space(Hs, Rs, Os):
+    '''
+    -Takes in RNN weights and returns a plot of the state space
+    '''
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    import numpy as np
+
     contexts = ["Change-point","Oddball"]
     plt.figure(figsize=(4, 8))
     
@@ -242,12 +252,17 @@ def plot_combined_state_space(Hs, Rs, Os):
     plt.show()
 
 
-_,_,area = plot_lrs(all_states,scale=0.05)
+_, rnn_activity = rnn_model.run_rnn(model_path, epochs=epochs, reset_memory=prm)
 
 
-for e in range(5):
-    plot_states(all_states[e])
+# _,_,area = plot_lrs(all_states,scale=0.05)
+utils_calcs.plot_lrs(all_states,scale=0.05)
 
+# for e in range(5):
+#     plot_states(all_states[e])
+
+for e in range(5): 
+    utils_calcs.plot_states(all_states[e])
 
 # Call the combined function with hidden states, rewards, hazard indications, and contexts
 # plot_combined_state_space(Hs, Rs, Os)
