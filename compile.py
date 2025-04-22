@@ -1,5 +1,7 @@
 '''
 This script compiles the state data from multiple .npz files into a single .pickle file.
+takes the best performance per seed
+make part of filtering process
 '''
 
 import numpy as np

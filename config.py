@@ -88,8 +88,11 @@ def get_rnn_ref_info(version:str = None):
         prm = 0.0
         troll = 100
         idx = -3
-        
+
+        seed = 2025
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
         models = f"./model_params_101000/*_V3_{gamma}g_{prm}rm_{troll}bz_0.0td_{tds}tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
 
-    return model_dir
+    return models

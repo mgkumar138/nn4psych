@@ -33,7 +33,7 @@ from torch.distributions import Categorical
 from tasks import PIE_CP_OB
 import matplotlib.pyplot as plt
 from torch.nn import init
-from behav_figures import plot_analysis, get_lrs, saveload
+from plots_behav import plot_analysis, get_lrs, saveload
 from scipy.stats import linregress
 # Assuming that PIE_CP_OB is a gym-like environment
 # from your_environment_file import PIE_CP_OB

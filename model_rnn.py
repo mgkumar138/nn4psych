@@ -44,61 +44,16 @@ class ActorCritic(nn.Module):
         r = r.squeeze(1)
         critic_value = self.critic(r)
 
-        return self.actor(r), critic_value, h
+        return self.actor(r), critic_value, h #this return in analyze_rnn.py
+    
+        #return self.actor(r), self.critic(r), h #written like this in analyze_rnn_fp
     
 
 
 #%% run the model
 
-def get_area(model_path, epochs=100, reset_memory=0.0):
-    '''
-    Runs the RNN model given a model_path to pretrained weights
-    -returns all_states
-    '''
-    hidden_dim = 64
-    trials = 200
 
-    model = ActorCritic(9, hidden_dim, 3)
-    model.load_state_dict(torch.load(model_path))
-
-    contexts = ["change-point", "oddball"]
-
-    all_states = np.zeros([epochs, 2, 5, trials])
-    for epoch in range(epochs):
-        for tt, context in enumerate(contexts):
-            env = PIE_CP_OB_v2(condition=context, max_time=300, total_trials=trials, 
-                               train_cond=False, max_displacement=10, reward_size=2)
-
-            hx = torch.randn(1, 1, hidden_dim) * 1 / hidden_dim**0.5
-            for trial in range(trials):
-
-                next_obs, done = env.reset()
-                norm_next_obs = env.normalize_states(next_obs)
-                next_state = np.concatenate([norm_next_obs, env.context, np.array([0.0])])
-                next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
-
-                hx = hx.detach()
-
-                while not done:
-
-                    if np.random.random_sample() < reset_memory:
-                        hx = (torch.randn(1, 1, hidden_dim) * 1 / hidden_dim**0.5)
-
-                    actor_logits, critic_value, hx = model(next_state, hx)
-                    probs = Categorical(logits=actor_logits)
-                    action = probs.sample()
-
-                    next_obs, reward, done = env.step(action.item())
-
-                    norm_next_obs = env.normalize_states(next_obs)
-                    next_state = np.concatenate([norm_next_obs, env.context, np.array([reward])])
-                    next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
-
-            all_states[epoch, tt] = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])
-
-    return all_states
-
-def run_rnn(model_path, epochs=100, reset_memory=0.0):
+def rnn_predict(model_path, epochs=100, reset_memory=0.0):
     '''
     Runs the RNN model given a model_path to pretrained weights
     -returns all_states, rnn_activity
@@ -112,6 +67,7 @@ def run_rnn(model_path, epochs=100, reset_memory=0.0):
     contexts = ["change-point", "oddball"]
 
     Hs, As, Cs, Rs, Os = [], [], [], [], []
+    Hs_all, Os_all = [], []
 
     all_states = np.zeros([epochs, 2, 5, trials])
     rnn_activity = np.zeros([epochs, 2], dtype=object)
@@ -136,7 +92,8 @@ def run_rnn(model_path, epochs=100, reset_memory=0.0):
                 hx = hx.detach()
 
                 while not done:
-
+                    
+                    # memory check not in analyze_rnn_fp 
                     if np.random.random_sample() < reset_memory:
                         hx = (torch.randn(1, 1, hidden_dim) * 1 / hidden_dim**0.5)
 
@@ -155,6 +112,8 @@ def run_rnn(model_path, epochs=100, reset_memory=0.0):
                     next_state = torch.FloatTensor(next_state).unsqueeze(0).unsqueeze(0)
 
             # Hs.append(h), As.append(a), Cs.append(c), Rs.append(r), Os.append(o)
+            Hs_all.append(torch.stack(h))
+            Os_all.append(torch.tensor(o))
 
             rnn_activity[epoch, tt] = (h, a, c, r, o)
             all_states[epoch, tt] = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])

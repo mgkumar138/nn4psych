@@ -1,7 +1,7 @@
 #%%
 import matplotlib.pyplot as plt
 import numpy as np
-from bayesian_models import BayesianModel
+from model_bayesian import BayesianModel
 
 def plot_states(states):
 

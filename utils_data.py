@@ -120,7 +120,7 @@ def filter_data(data_dir = "./model_params_101000/", threshold = 10):
             elif param_type == "scale":
                 scale_idx[val] = idx
 
-    return gamma_idx, rollout_idx, preset_idx, scale_idx
+    return gamma_idx, rollout_idx, preset_idx, scale_idx, models_idx
 
 def saveload(filename, variable, opt):
     import pickle
@@ -132,3 +132,99 @@ def saveload(filename, variable, opt):
         with open(f"{filename}.pickle", "rb") as file:
             return pickle.load(file)
 
+
+def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', 
+                    RNN_param_list = ["gamma", "preset", "rollout", "scale"],
+                    RNN_param_filters = None):
+    '''
+    -takes in a list of RNN parameters to analyze made from get_behavior.py
+    -returns a dictionary of the data for each parameter
+
+    previously: 
+        cp_array_'condition' = [state_vector - 5, trials - 200]
+        state_vector = np.array([env.trials, env.bucket_positions, env.bag_positions, env.helicopter_positions, env.hazard_triggers])
+    new: 
+        now going to be cp_array_'condition' = [epoch, state_vector, trials] [30,5,200]
+        results = [rnn param, epoch] = {cp_array etc...}
+
+    -get_lrs_v2 returns vector clipped by prediction error threshold
+
+    '''
+    from scipy.ndimage import uniform_filter1d
+    import numpy as np
+    import utils_calcs
+    import utils_data
+    import matplotlib.pyplot as plt
+
+    results = {}
+    for rnn_param in RNN_param_list:
+        cp_array, ob_array, model_list = utils_data.unpickle_state_vector(file_dir = file_dir, RNN_param=rnn_param)
+
+        #filter the models
+        if RNN_param_filters is not None:
+            model_list = utils_data.filter_models(model_list, RNN_param_filters)
+
+
+        if len(cp_array[0]) == 5: # 5 state variables
+            pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[utils_calcs.get_lrs_v3(cp_array[i]) for i in range(len(model_list))])
+            pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[utils_calcs.get_lrs_v3(ob_array[i]) for i in range(len(model_list))])
+
+            results[rnn_param] = {
+                'cp_array': cp_array,
+                'pe_sorted_cp': pe_sorted_cp,
+                'lr_sorted_cp': lr_sorted_cp,
+                'pe_unsorted_cp': pe_unsorted_cp,
+                'lr_unsorted_cp': lr_unsorted_cp,
+                'area_cp': area_cp,
+                'ob_array': ob_array,
+                'pe_sorted_ob': pe_sorted_ob,
+                'lr_sorted_ob': lr_sorted_ob,
+                'pe_unsorted_ob': pe_unsorted_ob,
+                'lr_unsorted_ob': lr_unsorted_ob,
+                'area_ob': area_ob,
+                'model_list': model_list
+            }
+        elif len(cp_array[0]) == 30: #30 epochs 
+            for epoch in range(len(cp_array[0])):
+                pe_sorted_cp, lr_sorted_cp, pe_unsorted_cp, lr_unsorted_cp, area_cp = zip(*[utils_calcs.get_lrs_v3(cp_array[i][epoch]) for i in range(len(model_list))])
+                pe_sorted_ob, lr_sorted_ob, pe_unsorted_ob, lr_unsorted_ob, area_ob = zip(*[utils_calcs.get_lrs_v3(ob_array[i][epoch]) for i in range(len(model_list))])
+
+                results[rnn_param, epoch] = {
+                    'cp_array': cp_array,
+                    'pe_sorted_cp': pe_sorted_cp,
+                    'lr_sorted_cp': lr_sorted_cp,
+                    'pe_unsorted_cp': pe_unsorted_cp,
+                    'lr_unsorted_cp': lr_unsorted_cp,
+                    'area_cp': area_cp,
+                    'ob_array': ob_array,
+                    'pe_sorted_ob': pe_sorted_ob,
+                    'lr_sorted_ob': lr_sorted_ob,
+                    'pe_unsorted_ob': pe_unsorted_ob,
+                    'lr_unsorted_ob': lr_unsorted_ob,
+                    'area_ob': area_ob,
+                    'model_list': model_list
+                }
+
+    return results
+
+def get_rnn_activity(file_dir="data/rnn_behav/model_params_101000", 
+                        RNN_param_list=["gamma", "preset", "rollout", "scale"],
+                        RNN_param_filters=None):
+    results = {}
+    for rnn_param in RNN_param_list:
+        # Assumes unpickle_rnn_activity returns a tuple (rnn_activity, model_list)
+        rnn_activity, model_list = utils_data.unpickle_rnn_activity(file_dir, rnn_param)
+        if RNN_param_filters is not None:
+            model_list = utils_data.filter_models(model_list, RNN_param_filters)
+
+        Hs, As, Cs, Rs, Os, Hs_all, Os_all = zip(*[utils_calcs.get_rnn_act_v3(rnn_activity[i])
+                                                  for i in range(len(model_list))])
+        results[rnn_param] = {
+            "rnn_array": rnn_activity,
+            "rnn_act_sorted": sorted_act,
+            "rnn_act_unsorted": unsorted_act,
+            "metric": metric,
+            "model_list": model_list
+        }
+
+    return results

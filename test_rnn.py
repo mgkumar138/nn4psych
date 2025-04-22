@@ -2,7 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import utils_data, utils_calcs, ref_info
+import utils_data, utils_calcs, config
 import torch
 from tasks import PIE_CP_OB_v2
 from torch.distributions import Categorical
@@ -16,17 +16,14 @@ analysis = 'all'
 epochs = 30 #different format if more than 1 epoch (need to standardize this later)
 #current format was made for pyem, but only saves 1st epoch
 
-data_dir, ref_info = ref_info.ref_info(version = "V3")
+data_dir, config = config.ref_info(version = "V3")
 save_dir = "data/rnn_behav/model_params_101000/30_epochs/" 
 os.makedirs(save_dir, exist_ok=True)
-
-bias = False
-
 
 if analysis == 'gamma' or analysis == "all":
     # influence of gamma
 
-    gammas = ref_info['gammas'] # 0.99,0.95, 0.9,0.8,0.7, 0.5, 0.25, 0.1
+    gammas = config['gammas'] # 0.99,0.95, 0.9,0.8,0.7, 0.5, 0.25, 0.1
     # gammas = [0.99, 0.95, 0.9, 0.8, 0.7, 0.5, 0.25, 0.1] # 0.99,0.95, 0.9,0.8,0.7, 0.5, 0.25, 0.1
     all_param_states = {'gammas':gammas,'states':[]}
 
@@ -37,7 +34,7 @@ if analysis == 'gamma' or analysis == "all":
     
     for g, gamma in enumerate(gammas):
         
-        file_names = data_dir + ref_info['gamma']['file_pattern']
+        file_names = data_dir + config['gamma']['file_pattern']
 
         # file_names= data_dir+f"*_V3_{gamma}g_0.0rm_100bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
         models = glob.glob(file_names)
@@ -47,7 +44,7 @@ if analysis == 'gamma' or analysis == "all":
 
         for m, model in enumerate(models):
             
-            all_states = utils_calcs.get_area(model, epochs=epochs)
+            all_states = model_rnn.get_area(model, epochs=epochs)
             all_param_states['states'].append(all_states)
 
             gamma_dict[m, g] = {"gamma", gamma}
