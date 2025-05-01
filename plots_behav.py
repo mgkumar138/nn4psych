@@ -679,7 +679,7 @@ def plot_param_area_v2(behav_dict):
 
 
 # behav_dict = get_batch_behav(file_dir='data/rnn_behav/model_params_101000/30_epochs')
-behav_dict = get_batch_behav()
+#behav_dict = get_batch_behav()
 
 # plot_lrs_v3_batch(behav_dict, scale=0.1)
 # plot_lr_bins_post_hazard_batch(behav_dict)

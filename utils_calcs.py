@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from torch.nn import init
 from tasks import PIE_CP_OB_v2
 
-
+#bayesian_model specific equations (move back into model_bayesian.py)
 def calculate_normative_update(alpha, delta):
     """
     Equation 1: Calculate normative update.
@@ -128,6 +128,7 @@ def calculate_sigma_update(sigma_motor, normative_update, sigma_LR):
     """
     return sigma_motor + normative_update * sigma_LR
 
+#lr in analyze_hyperparams (standardize to the rest)
 def get_lrs_analyze_hyperparams(states):
     epochs = states.shape[0]
     pess, lrss, area = [],[], []
@@ -149,7 +150,6 @@ def get_lrs_analyze_hyperparams(states):
         lrss.append(learning_rate_sorted)
         area.append(np.trapz(learning_rate_sorted, prediction_error_sorted))
     return area, pess, lrss
-
 
 def get_lrs_v2_analyze_hyperparams(states, threshold=20):
     '''
@@ -177,7 +177,7 @@ def get_lrs_v2_analyze_hyperparams(states, threshold=20):
 
     return prediction_error_sorted, learning_rate_sorted
 
-
+#lr elsewhere
 def get_lrs(states):
     true_state = states[2]  # bag position
     predicted_state = states[1]  # bucket position
@@ -251,6 +251,7 @@ def get_lrs_v3(states, threshold=0):
 
     return prediction_error_sorted, learning_rate_sorted, pes, lrs, area
 
+#small calcs
 def get_mean_ci(x, valididx):
     m = []
     s = []

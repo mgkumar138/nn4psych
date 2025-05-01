@@ -67,15 +67,18 @@ model_filters = utils_data.get_model_filters(config, threshold = 10)
 
 # analyze with behav plots
 
-behav_dict = plots_behav.get_batch_behav(config, model_filters)
+behav_dict = utils_data.get_batch_behav(config, model_filters)
 plots_behav(behav_dict) 
 
 # analyze with rnn plots
+#needs seeds / (setup in compile.py?)
 rnn_act_dict = utils_data.get_rnn_activity(config, model_filters)
 plots_rnn(rnn_act_dict)
 
 # analyze with bayesian models
 
 model_pyem(config)
+#need shawn's model figures here
 
-# %%
+
+# %% part 4 - other analysis in progress, model checks

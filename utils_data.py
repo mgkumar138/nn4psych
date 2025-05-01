@@ -36,8 +36,6 @@ def extract_states(states):
         current += 1
     return prediction_error, update, learning_rate, true_state, predicted_state,hazard_distance, hazard_trials
 
-
-
 def unpickle_state_vector(file_dir:str = "data/rnn_behav/model_params_101000/", RNN_param: str="None"):
     """
     Unpickle the state vector made by get_behavior.py.
@@ -131,7 +129,6 @@ def saveload(filename, variable, opt):
     else:
         with open(f"{filename}.pickle", "rb") as file:
             return pickle.load(file)
-
 
 def get_batch_behav(file_dir='data/rnn_behav/model_params_101000', 
                     RNN_param_list = ["gamma", "preset", "rollout", "scale"],
