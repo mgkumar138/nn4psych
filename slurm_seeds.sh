@@ -1,14 +1,16 @@
 #!/bin/bash
 
 # Define the arrays of hyperparameters
-epochs=50000
-trials=200
-maxdisp_values=(20 10 5) 
-rewardsize_values=(2 5 10)
-lr_values=(0.0 0.000001 0.00001 0.0001)
-nrnn_values=(64 128 256)
-loadmodel_values=(0)
-gamma_values=(0.95 0.99 0.9 0.8)
+# epochs=50000
+# trials=200
+# maxdisp_values=(20 10 5) 
+# rewardsize_values=(2 5 10)
+# lr_values=(0.0 0.000001 0.00001 0.0001)
+# nrnn_values=(64 128 256)
+# loadmodel_values=(0)
+# gamma_values=(0.95 0.99 0.9 0.8)
+
+eval "$(cat export_pretrain_params.sh)"
 
 # Iterate through all combinations of hyperparameters
 for gamma in "${gamma_values[@]}"; do
@@ -36,7 +38,7 @@ for gamma in "${gamma_values[@]}"; do
 eval "\$(conda shell.bash hook)"
 conda activate pytorch
 
-CMD="python -u pretrain_rnn_with_heli_server.py --epochs $epochs --trials $trials --maxdisp $maxdisp --rewardsize $rewardsize --lr $lr --gamma $gamma --nrnn $nrnn --loadmodel $loadmodel --seed \${SLURM_ARRAY_TASK_ID}"
+CMD="python -u pretrain_rnn.py --epochs $epochs --trials $trials --maxdisp $maxdisp --rewardsize $rewardsize --lr $lr --gamma $gamma --nrnn $nrnn --loadmodel $loadmodel --seed \${SLURM_ARRAY_TASK_ID}"
 
 echo \$CMD
 eval \$CMD

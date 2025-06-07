@@ -1,6 +1,9 @@
 '''
 This file contains the code for plotting the results of the RNN model.
 '''
+    import model_rnn
+    import config
+    import utils_data
 
 def plot_combined_state_space(Hs, Rs, Os):
     '''
@@ -200,6 +203,10 @@ def calc_rnn_significant_units():
     np.save('data/proportions.npy', proportions_np)
 
 def plot_rnn_significant_units():
+    '''
+    Plot the proportion of significant hidden units over time.
+    -in progress
+    '''
     plt.figure(figsize=(10, 6))
     plt.plot(range(len(proportions_np)), proportions_np, label='Proportion of Significant Hidden Units', color='red')
     plt.xlabel('Time')
@@ -209,3 +216,28 @@ def plot_rnn_significant_units():
     plt.legend()
     plt.show()
     plt.savefig('plots/proportion_significant_units.png')
+
+def run_all_plots(rnn_act_dict, model_path):
+    '''
+    hold
+    '''
+
+  
+
+def plot_combined_state_space_from_dict(rnn_act_dict, hp_to_use, model_path):
+    """
+    Extract Hs, Rs, Os for a specific model_path from rnn_act_dict and plot using plot_combined_state_space.
+    Args:
+        rnn_act_dict: dict, output from utils_data.get_rnn_activity
+        hp_to_use: str, hyperparameter name (e.g. 'gamma')
+        model_path: str, path to the model to plot
+    """
+    model_list = rnn_act_dict[hp_to_use]['model_list']
+    try:
+        model_idx = model_list.index(model_path)
+    except ValueError:
+        raise ValueError(f"Model path {model_path} not found in model_list for {hp_to_use}.")
+    Hs = rnn_act_dict[hp_to_use]['Hs'][model_idx]
+    Rs = rnn_act_dict[hp_to_use]['Rs'][model_idx]
+    Os = rnn_act_dict[hp_to_use]['Os'][model_idx]
+    plot_combined_state_space(Hs, Rs, Os)

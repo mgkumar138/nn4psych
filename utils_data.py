@@ -1,12 +1,18 @@
 #%%
 '''
-Useful functions 
+Useful functions for extracting, filtering and processing pickled data. 
 '''
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import linregress
 from scipy.ndimage import uniform_filter1d
 from scipy import stats
+import config
+import glob
+
+import utils_calcs
+import utils_data
+
 
 def extract_states(states):
     '''
@@ -66,59 +72,50 @@ def unpickle_state_vector(file_dir:str = "data/rnn_behav/model_params_101000/", 
 
     return cp_array, ob_array, model_list
 
-def filter_data(data_dir = "./model_params_101000/", threshold = 10):
+def unpickle_rnn_activity(file_dir:str = "data/rnn_behav/model_params_101000/", RNN_param: str="None"):
+    """
+    Unpickle the RNN activity data made by get_rnn_activity.py.
+    
+    Parameters:
+        file_dir (str): Directory where the RNN activity files are stored.
+        RNN_param (str): The RNN parameter to filter the models.
+    
+    Returns:
+        tuple: A tuple containing the RNN activity and model list.
+    """
+    import os
+    import pickle
+
+    with open(os.path.join(file_dir, f"{RNN_param}_rnn_activity.pkl"), 'rb') as f:
+        rnn_activity = pickle.load(f)
+
+    with open(os.path.join(file_dir, f"{RNN_param}_model_list.pkl"), 'rb') as f:
+        model_list = pickle.load(f)
+
+    return rnn_activity, model_list
+
+def filter_data(hp_list, 
+                data_dir = "./model_params_101000/", threshold = 10):
     '''
     returns - index of models that meet the performance filter 
     '''
-    gamma_idx = {}
-    rollout_idx = {}
-    preset_idx = {}
-    scale_idx = {}
+    import glob
 
-    #all possible hyper parameters
-    gammas  = [0.99, 0.95, 0.9, 0.8, 0.7, 0.5, 0.25, 0.1]
-    rollouts = [5, 10, 20, 30, 50, 75, 100, 150, 200]  # skipped 40
-    presets = [0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0]
-    scales  = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5]
+    hp_filter_idx = {hp: {} for hp in hp_list}
 
-    # Define a dictionary of hyperparameter configurations (value list and file pattern)
-    param_configs = {
-        "gamma": (
-            gammas,
-            "*_V3_{val}g_0.0rm_100bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
-        ),
-        "rollout": (
-            rollouts,
-            "*_V3_0.95g_0.0rm_{val}bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
-        ),
-        "preset": (
-            presets,
-            "*_V3_0.95g_{val}rm_100bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
-        ),
-        "scale": (
-            scales,
-            "*_V3_0.95g_0.0rm_100bz_0.0td_{val}tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
-        )
-    }
-
-    for param_type, (values, pattern) in param_configs.items():
+    for hp in hp_list:
+        values = hp_list[hp]['values']
+        pattern = hp_list[hp]['file_pattern']
         for val in values:
             file_names = data_dir + pattern.format(val=val)
             models = glob.glob(file_names)
             # Initial cutoff: only keep models with performance metric > 5 (previously done)
-            initial_filtered = [m for m in models if float(m.split("\\")[-1].split("_")[0]) > 5]
+            file_names = [m for m in models if float(m.split("\\")[-1].split("_")[0]) > 5]
             # Create a boolean index array based on the second cutoff (performance > threshold)
-            idx = [float(m.split("\\")[-1].split("_")[0]) > threshold for m in initial_filtered]
-            if param_type == "gamma":
-                gamma_idx[val] = idx
-            elif param_type == "rollout":
-                rollout_idx[val] = idx
-            elif param_type == "preset":
-                preset_idx[val] = idx
-            elif param_type == "scale":
-                scale_idx[val] = idx
+            idx = [float(m.split("\\")[-1].split("_")[0]) > threshold for m in file_names]
+            hp_filter_idx[hp][val] = idx
 
-    return gamma_idx, rollout_idx, preset_idx, scale_idx, models_idx
+    return hp_filter_idx
 
 def saveload(filename, variable, opt):
     import pickle
@@ -147,11 +144,6 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000',
     -get_lrs_v2 returns vector clipped by prediction error threshold
 
     '''
-    from scipy.ndimage import uniform_filter1d
-    import numpy as np
-    import utils_calcs
-    import utils_data
-    import matplotlib.pyplot as plt
 
     results = {}
     for rnn_param in RNN_param_list:
@@ -159,7 +151,7 @@ def get_batch_behav(file_dir='data/rnn_behav/model_params_101000',
 
         #filter the models
         if RNN_param_filters is not None:
-            model_list = utils_data.filter_models(model_list, RNN_param_filters)
+            model_list = filter_data(model_list, RNN_param_filters)
 
 
         if len(cp_array[0]) == 5: # 5 state variables
@@ -210,9 +202,9 @@ def get_rnn_activity(file_dir="data/rnn_behav/model_params_101000",
     results = {}
     for rnn_param in RNN_param_list:
         # Assumes unpickle_rnn_activity returns a tuple (rnn_activity, model_list)
-        rnn_activity, model_list = utils_data.unpickle_rnn_activity(file_dir, rnn_param)
+        rnn_activity, model_list = unpickle_rnn_activity(file_dir, rnn_param)
         if RNN_param_filters is not None:
-            model_list = utils_data.filter_models(model_list, RNN_param_filters)
+            model_list = filter_models(model_list, RNN_param_filters)
 
         Hs, As, Cs, Rs, Os, Hs_all, Os_all = zip(*[utils_calcs.get_rnn_act_v3(rnn_activity[i])
                                                   for i in range(len(model_list))])

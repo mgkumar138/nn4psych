@@ -236,7 +236,6 @@ class ContinuousPredictiveInferenceEnv(gym.Env):
     def close(self):
         pass
 
-
 class PIE_CP_OB:
     def __init__(self, condition="changepoint", total_trials=200,max_time=300, train_cond=False, 
                  max_displacement=15, reward_size=7.5, step_cost=0.0, alpha=1):
@@ -434,7 +433,6 @@ class PIE_CP_OB:
         plt.show()
 
         return np.array([self.trials, self.bucket_positions, self.bag_positions, self.helicopter_positions, self.hazard_triggers])
-
 
 class PIE_CP_OB_v2:
     def __init__(self, condition="change-point", total_trials=200,max_time=300, train_cond=False, 

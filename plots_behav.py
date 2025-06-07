@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 from scipy.stats import linregress
 from scipy.ndimage import uniform_filter1d
 import scipy.stats as stats
+import utils_calcs, utils_data
+
+
 
 #v1 plots - largely out of usage
 
@@ -160,13 +163,13 @@ def plot_states(states):
         plt.savefig(f'./analysis/{context}_states.png')
         plt.savefig(f'./analysis/{context}_states.svg')
 
-def plot_lrs(states, scale=0.1):
+def plot_lrs(states, scale=0.1, verbose=False):
     epochs = states.shape[0]
     pess, lrss, area = [], [], []
     for c in range(2):
         pes, lrs = [], []
         for e in range(epochs):
-            pe, lr = utils_calcs.get_lrs_v2(states[e, c])
+            _, _, pe, lr, _ = utils_calcs.get_lrs_v2(states[e, c])
 
             pes.append(pe)
             lrs.append(lr)
@@ -181,18 +184,20 @@ def plot_lrs(states, scale=0.1):
         lrss.append(learning_rate_sorted)
         area.append(np.trapz(learning_rate_sorted, prediction_error_sorted))
 
-    plt.figure(figsize=(3, 2))
-    colors = ['orange', 'brown']
-    labels = ['CP', 'OB']
-    for i in range(2):
-        window_size = int(len(lrss[i]) * scale)
-        smoothed_learning_rate = uniform_filter1d(lrss[i], size=window_size)
-        plt.plot(pess[i], smoothed_learning_rate, color=colors[i], linewidth=2, label=labels[i])
-    plt.legend()
-    plt.xlabel('Prediction error')
-    plt.ylabel('Learning rate')
-    plt.title(f'CB={area[0]:.1f}, OB={area[1]:.1f}, A={(area[0] - area[1]):.1f}')
-    plt.tight_layout()
+    if verbose:
+        plt.figure(figsize=(3, 2))
+        colors = ['orange', 'brown']
+        labels = ['CP', 'OB']
+        for i in range(2):
+            window_size = int(len(lrss[i]) * scale)
+            smoothed_learning_rate = uniform_filter1d(lrss[i], size=window_size)
+            plt.plot(pess[i], smoothed_learning_rate, color=colors[i], linewidth=2, label=labels[i])
+        plt.legend()
+        plt.xlabel('Prediction error')
+        plt.ylabel('Learning rate')
+        plt.title(f'CB={area[0]:.1f}, OB={area[1]:.1f}, A={(area[0] - area[1]):.1f}')
+        plt.tight_layout()
+
     return pess, lrss, area
 
 def plot_behavior(states, context,epoch, ax=None):
@@ -676,19 +681,24 @@ def plot_param_area_v2(behav_dict):
 
 # %% Organize batch_data
 
+if __name__ == "__main__":
 
+    behav_dict = utils_data.get_batch_behav(file_dir='data/rnn_behav/model_params_101000/30_epochs')
+    #behav_dict = get_batch_behav()
 
-# behav_dict = get_batch_behav(file_dir='data/rnn_behav/model_params_101000/30_epochs')
-#behav_dict = get_batch_behav()
+def run_all_plots(behav_dict):
+    """
+    Run all plots using the provided behavior dictionary.
+    """
+    plot_lrs_v3_batch(behav_dict, scale=0.1)
+    plot_lr_bins_post_hazard_batch(behav_dict)
+    plot_lr_curve_post_hazard(behav_dict)
+    plot_update_ratio(behav_dict)
+    plot_all_update_ratios(behav_dict)
+    plot_all_update_ratios(behav_dict, hazard_distance_filter=[1, 3])
+    plot_param_area_v2(behav_dict)
 
-# plot_lrs_v3_batch(behav_dict, scale=0.1)
-# plot_lr_bins_post_hazard_batch(behav_dict)
-# plot_lr_curve_post_hazard(behav_dict)
-# plot_update_ratio(behav_dict)
-# plot_all_update_ratios(behav_dict)
-# plot_all_update_ratios(behav_dict, hazard_distance_filter= [1,3])
-plot_param_area_v2(behav_dict)
-
+run_all_plots(behav_dict)
 
 #%% V1 plots - out of date
 

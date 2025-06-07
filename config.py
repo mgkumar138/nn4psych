@@ -6,15 +6,30 @@ storage for data_dir, parameter info
 - also getting out pkls in behav_figures.py
 '''
 
+def pretrain_hp_info(version:str = "V5"):
+    """
+    - Returns a dictionary with pretraining information for slurm jobs
+    """
+    grid = {
+    "epochs": 50000,
+    "trials": 200,
+    "gamma": [0.95, 0.99, 0.9, 0.8],
+    "maxdisp": [20, 10, 5],
+    "rewardsize": [2, 5, 10],
+    "lr": [0.0, 0.000001, 0.00001, 0.0001],
+    "nrnn": [64, 128, 256],
+    "loadmodel": [0]
+}
 
+    return grid
 
-def ref_info(version:str = None):
+def rnn_weights_info(version:str = None):
     """
     - Returns a dictionary with values and file pattern for the specified parameter
     -depends on the different versions (seems like 3 and 5 right now)
     """
     if version == "V3":
-        ref_info_dict = {
+        rnn_weights_dict = {
             "gamma": {
                 "values": [0.99, 0.95, 0.9, 0.8, 0.7, 0.5, 0.25, 0.1],
                 "file_pattern": "*_V3_{val}g_0.0rm_100bz_0.0td_1.0tds_Nonelb_Noneup_64n_50000e_10md_5.0rz_*s.pth"
@@ -57,7 +72,7 @@ def ref_info(version:str = None):
     else: 
         raise ValueError("Invalid version. Choose either 'V3' or 'V5'.")
     
-    return data_dir, ref_info_dict
+    return data_dir, rnn_weights_dict
 
 def task_info(version:str = None):
     """
@@ -72,11 +87,25 @@ def task_info(version:str = None):
         "max_time": 300,
         "n_trials": 200,
         "epochs": 100,
-        "input_dim": 6 + 3,  # set this based on your observation space. observation vector is length 4 [helicopter pos, bucket pos, bag pos, bag-bucket pos], context vector is length 2.
-        "hidden_dim": 64,  # size of RNN
-        "action_dim": 3,  # set this based on your action space. 0 is left, 1 is right, 2 is confirm.
+
     }
     return task_info_dict   
+
+def rnn_info(version:str = None):
+    """
+    - Returns a dictionary with values necessary to run the RNN model
+    """
+    rnn_info_dict = {
+        "input_dim": 6 + 3,  # set this based on your observation space. observation vector is length 4 [helicopter pos, bucket pos, bag pos, bag-bucket pos], context vector is length 2.
+        "hidden_dim": 64,  # size of RNN
+        "gain": 1.5,  # gain for the RNN
+        "noise": 0.0,  # noise for the RNN
+        "action_dim": 3,  # set this based on your action space. 0 is left, 1 is right, 2 is confirm.
+
+        "bias": True,  # whether to use bias in the RNN
+        "reset_memory": 0.0,  # reset memory parameter for the RNN
+    }
+    return rnn_info_dict    
 
 def get_rnn_ref_info(version:str = None):
     '''

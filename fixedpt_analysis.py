@@ -90,13 +90,14 @@ trajectory_2d = pca.fit_transform(trajectory)
 fixed_points_2d = pca.transform(fixed_points) if len(fixed_points) > 0 else None
 
 # Plot trajectory in 2D PCA space
-plt.figure(figsize=(8, 6))
-plt.plot(trajectory_2d[:, 0], trajectory_2d[:, 1], label="RNN Trajectory")
-if fixed_points_2d is not None:
-    plt.scatter(fixed_points_2d[:, 0], fixed_points_2d[:, 1], color="red", label="Fixed Points")
-plt.xlabel("PCA Component 1")
-plt.ylabel("PCA Component 2")
-plt.title("RNN Dynamics (2D PCA Projection)")
-plt.legend()
-plt.grid()
-plt.show()
+def plot_trajectory(trajectory, fixed_points=None):
+    plt.figure(figsize=(8, 6))
+    plt.plot(trajectory[:, 0], trajectory[:, 1], label="RNN Trajectory")
+    if fixed_points is not None:
+        plt.scatter(fixed_points[:, 0], fixed_points[:, 1], color="red", label="Fixed Points")
+    plt.xlabel("PCA Component 1")
+    plt.ylabel("PCA Component 2")
+    plt.title("RNN Dynamics (2D PCA Projection)")
+    plt.legend()
+    plt.grid()
+    plt.show()

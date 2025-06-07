@@ -5,14 +5,14 @@ parser.add_argument('--analysis', type=str, required=False, help='analysis', def
 args, unknown = parser.parse_known_args()
 print(args)
 
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-from tasks import PIE_CP_OB_v2
-from torch.distributions import Categorical
-import glob
-import utils_data as utils_data
-import utils_calcs as utils_calcs
+# import numpy as np
+# import matplotlib.pyplot as plt
+# import torch
+# from tasks import PIE_CP_OB_v2
+# from torch.distributions import Categorical
+# import glob
+# import utils_data as utils_data
+# import utils_calcs as utils_calcs
 
 
 def plot_param_area(param, areas, xlabel, validms, logx=False, legend=False):

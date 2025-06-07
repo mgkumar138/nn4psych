@@ -5,20 +5,39 @@ so that it sort of knows what to do.
 The model weights are saved to run a single epoch of 100 trials of each condition, 
 similar to Nassar et al. 2021 
 and for additional analyses
+-v5
 '''
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+from torch.distributions import Categorical
+from tasks import PIE_CP_OB_v2
+import matplotlib.pyplot as plt
+from torch.nn import init
+from utils_calcs import get_lrs_v2, saveload, plot_behavior
+from scipy.stats import linregress
+from scipy.ndimage import uniform_filter1d
+from copy import deepcopy
 
 import argparse
+#env parameters
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, required=False, help='epochs', default=10)
 parser.add_argument('--trials', type=int, required=False, help='trials', default=200)
 parser.add_argument('--maxt', type=int, required=False, help='maxt', default=300)
 parser.add_argument('--maxdisp', type=int, required=False, help='maxdisp', default=10)
 parser.add_argument('--rewardsize', type=float, required=False, help='rewardsize', default=5)
+parser.add_argument('--contexts', type=str, nargs='+', required=False, help='contexts', default=["change-point", "oddball"])
 
+# rnn structure
 parser.add_argument('--nrnn', type=int, required=False, help='nrnn', default=64)
 parser.add_argument('--seed', type=int, required=False, help='seed', default=0)
 parser.add_argument('--ratio', type=float, required=False, help='ratio', default=0.5)
+parser.add_argument('--input_dim', type=int, required=False, help='input_dim', default=6)  # 4 obs + 2 context + 1 reward
+parser.add_argument('--action_dim', type=int, required=False, help='action_dim', default=3)  # 0 is left, 1 is right, 2 is confirm
 
+#rnn hyperparams
 parser.add_argument('--gamma', type=float, required=False, help='gamma', default=0.95)
 parser.add_argument('--rollsz', type=int, required=False, help='rollsz', default=50)
 parser.add_argument('--tdnoise', type=float, required=False, help='tdnoise', default=0.1)
@@ -29,19 +48,6 @@ parser.add_argument('--tdscale', type=float, required=False, help='tdscale', def
 
 args, unknown = parser.parse_known_args()
 print(args)
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import numpy as np
-from torch.distributions import Categorical
-from tasks import PIE_CP_OB_v2
-import matplotlib.pyplot as plt
-from torch.nn import init
-from utils_funcs import get_lrs_v2, saveload, plot_behavior
-from scipy.stats import linregress
-from scipy.ndimage import uniform_filter1d
-from copy import deepcopy
 
 # if torch.backends.mps.is_available():
 #     device = torch.device("mps")
@@ -56,10 +62,9 @@ n_epochs = args.epochs  # number of epochs to train the model on. Similar to the
 n_trials = args.trials  # number of trials per epoch for each condition.
 
 train_epochs = n_epochs * args.ratio  # number of epochs where the helicopter is shown to the agent. if 0, helicopter is never shown.
-contexts = ["change-point", "oddball"]  # "change-point", "oddball"
+contexts = args.contexts  # "change-point", "oddball"
 num_contexts = len(contexts)
 
-# Task parameters
 max_displacement = args.maxdisp  # number of units each left or right moves.
 max_time = args.maxt  # int(5*300//max_displacement)
 step_cost = 0  # -1/300  # penalize every additional step that the agent does not confirm. 
@@ -67,9 +72,9 @@ reward_size = args.rewardsize  # smaller value means a tighter margin to get rew
 alpha = 1
 
 # Model Parameters
-input_dim = 6 + 3  # set this based on your observation space. observation vector is length 4 [helicopter pos, bucket pos, bag pos, bag-bucket pos], context vector is length 2.  
+input_dim = args.input_dim  # set this based on your observation space. observation vector is length 4 [helicopter pos, bucket pos, bag pos, bag-bucket pos], context vector is length 2.  
 hidden_dim = args.nrnn  # size of RNN
-action_dim = 3  # set this based on your action space. 0 is left, 1 is right, 2 is confirm.
+action_dim = args.action_dim  # set this based on your action space. 0 is left, 1 is right, 2 is confirm.
 params = hidden_dim * (input_dim + hidden_dim + action_dim + 1)
 
 bias = [0, 0, 0]
@@ -90,7 +95,6 @@ torch.manual_seed(seed)
 exptname = f"V5_{gamma}g_{reset_memory}rm_{rollout_size}bz_{tdnoise}td_{tdscale}tds_{hidden_dim}n_{n_epochs}e_{max_displacement}md_{reward_size}rz_{seed}s"
 print(exptname)
 model_path = None
-
 
 # Actor-Critic Network with RNN
 class ActorCritic(nn.Module):
@@ -126,10 +130,8 @@ class ActorCritic(nn.Module):
         r = r.squeeze(1)
         return self.actor(r), self.critic(r), h
 
-
 def to_numpy(tensor):
     return tensor.cpu().detach().numpy()
-
 
 class RolloutBuffer:
     def __init__(self, buffer_size):
@@ -159,7 +161,6 @@ class RolloutBuffer:
         self.log_probs.clear()
         self.entropies.clear()
         self.dones.clear()
-
 
 def compute_gae(buffer, gamma, device):
     rewards = buffer.rewards
@@ -322,55 +323,8 @@ for epoch in range(n_epochs):
         # model_path = f'./model_params/Falseheli_{epoch+1}e_{exptname}.pth'
         # torch.save(model.state_dict(), model_path)
 
-
-def get_lrs_v3(states, threshold=20):
-    true_state = states[2]  # bag position
-    predicted_state = states[1]  # bucket position
-    prediction_error = (true_state - predicted_state)[:-1]
-    update = np.diff(predicted_state)
-
-    idx = prediction_error !=0
-    prediction_error= prediction_error[idx]
-    update = update[idx]
-    learning_rate = update / prediction_error
-
-    prediction_error = abs(prediction_error)
-    idx = prediction_error>threshold
-    pes = prediction_error[idx]
-    lrs = np.clip(learning_rate,0,1)[idx]
-
-    sorted_indices = np.argsort(pes)
-    prediction_error_sorted = pes[sorted_indices]
-    learning_rate_sorted = lrs[sorted_indices]
-
-    return prediction_error_sorted, learning_rate_sorted
-
-
-def plot_lrs(states, scale=0.1):
-    epochs = states.shape[0]
-    pess, lrss, area = [],[], []
-    for c in range(2):
-        pes,lrs = [],[]
-        for e in range(epochs):
-            pe, lr = get_lrs_v3(states[e, c])
-
-            pes.append(pe)
-            lrs.append(lr)
-
-        pes = np.concatenate(pes)
-        lrs = np.concatenate(lrs)
-        sorted_indices = np.argsort(pes)
-        prediction_error_sorted = pes[sorted_indices]
-        learning_rate_sorted = lrs[sorted_indices]
-
-        pess.append(prediction_error_sorted)
-        lrss.append(learning_rate_sorted)
-        area.append(np.trapz(learning_rate_sorted, prediction_error_sorted))
-    
-    return pess, lrss, area
-
-
-
+#%% plots
+import plots_behav
 
 colors = ['orange', 'brown']
 labels = ['CP', 'OB']
@@ -415,8 +369,8 @@ gap = 100
 for i,id in enumerate(idxs):
 
     plt.subplot(5,2,i+5)
-    pess, lrss, area = plot_lrs(all_states[id-gap:id])
-    
+    pess, lrss, area = plots_behav.plot_lrs(all_states[id-gap:id])
+
     for c in range(2):
         window_size = int(len(lrss[c])*0.2)
         smoothed_learning_rate = uniform_filter1d(lrss[c], size=window_size)
@@ -434,10 +388,6 @@ for i,id in enumerate(idxs):
         j+=1
 
 plt.tight_layout()
-
-
-
-
 
 df_area = np.round(area[0]-area[1])
 if len(store_params)>0:

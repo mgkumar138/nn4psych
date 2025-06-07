@@ -1,0 +1,8 @@
+epochs_values=(50000)
+trials_values=(200)
+gamma_values=(0.95 0.99 0.9 0.8)
+maxdisp_values=(20 10 5)
+rewardsize_values=(2 5 10)
+lr_values=(0.0 1e-06 1e-05 0.0001)
+nrnn_values=(64 128 256)
+loadmodel_values=(0)

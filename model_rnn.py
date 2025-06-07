@@ -53,18 +53,25 @@ class ActorCritic(nn.Module):
 #%% run the model
 
 
-def rnn_predict(model_path, epochs=100, reset_memory=0.0):
+def rnn_predict(
+        rnn_model, 
+        model_path, 
+        hidden_dim = 64, 
+        trials = 200,
+        contexts = ["change-point", "oddball"],
+        epochs=100, 
+        reset_memory=0.0):
     '''
     Runs the RNN model given a model_path to pretrained weights
     -returns all_states, rnn_activity
     '''
-    hidden_dim = 64
-    trials = 200
+    # hidden_dim = 64
+    # trials = 200
 
-    model = ActorCritic(9, hidden_dim, 3)
+    model = rnn_model
     model.load_state_dict(torch.load(model_path))
 
-    contexts = ["change-point", "oddball"]
+    # contexts = ["change-point", "oddball"]
 
     Hs, As, Cs, Rs, Os = [], [], [], [], []
     Hs_all, Os_all = [], []

@@ -5,17 +5,8 @@ make part of filtering process
 '''
 
 import numpy as np
+import utils_data
 
-def saveload(filename, variable, opt):
-    import pickle
-    if opt == 'save':
-        with open(f"{filename}.pickle", "wb") as file:
-            pickle.dump(variable, file)
-        print('file saved')
-    else:
-        with open(f"{filename}.pickle", "rb") as file:
-            return pickle.load(file)
-    
 loadmodel = 1
 max_displacement = 20
 reward_size = 10
@@ -45,4 +36,4 @@ for seed in range(seeds):
 
 print(states.shape, perf.shape)
 
-saveload(f'./data/{loadmodel}pre_{max_displacement}md_{reward_size}rs_{hidden_dim}n', [states, perf],'save')
+utils_data.saveload(f'./data/{loadmodel}pre_{max_displacement}md_{reward_size}rs_{hidden_dim}n', [states, perf],'save')
