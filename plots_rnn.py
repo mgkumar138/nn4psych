@@ -1,9 +1,12 @@
 '''
 This file contains the code for plotting the results of the RNN model.
 '''
-    import model_rnn
-    import config
-    import utils_data
+import model_rnn
+import config
+import utils_data, utils_calcs
+import plots_rnn
+import matplotlib.pyplot as plt
+import numpy as np
 
 def plot_combined_state_space(Hs, Rs, Os):
     '''
@@ -217,27 +220,75 @@ def plot_rnn_significant_units():
     plt.show()
     plt.savefig('plots/proportion_significant_units.png')
 
-def run_all_plots(rnn_act_dict, model_path):
+def plot_param_area(
+        param, 
+        areas, 
+        xlabel, 
+        validms, 
+        logx=False, 
+        legend=False):
+
+    utils_data.saveload(f'./analysis/{xlabel}_area',[param, areas], 'save')
+
+    labels = ['CP', 'OB']
+    colors= ['orange', 'brown']
+
+    plt.figure(figsize=(3,2.5))
+    for c in range(2):
+        m,s = utils_calcs.get_mean_ci(areas[:,:,c],validms)
+
+        plt.plot(param, m, label=labels[c], color=colors[c])
+        plt.fill_between(x=param, y1=m-s, y2=m+s, alpha=0.2, color=colors[c])
+
+    dfarea = areas[:,:,0] - areas[:,:,1]
+    m,s = utils_calcs.get_mean_ci(dfarea,validms)
+    e = areas.shape[0]
+    plt.plot(param, m, label='CP-OB', color='k', linewidth=2)
+    plt.fill_between(x=param, y1=m-s, y2=m+s, alpha=0.2, color='k')
+    plt.xlabel(xlabel)
+    if legend:
+        plt.legend()
+    plt.ylabel('$A$')
+    if logx:
+        plt.xscale('log')
+    
+    plt.tight_layout()
+    plt.savefig(f'./analysis/{xlabel}_area_{e}e.png')
+    plt.savefig(f'./analysis/{xlabel}_area_{e}e.svg')
+
+
+def run_all_plots(rnn_act_dict, hp_list, model_path):
     '''
     hold
     '''
 
+    for hp in hp_list:
+        try:
+            area_data = utils_data.saveload(f'./analysis/{hp}_area', None, 'load')
+            param, areas = area_data  # param: list of values, areas: array [len(param), seeds, 2]
+            # For validms, use the number of models per param value (if available)
+            validms = np.array([areas.shape[1]] * len(param))
+            plots_rnn.plot_param_area(param, areas, hp, validms)
+            print(f'Plotted area for hyperparameter: {hp}')
+        except Exception as e:
+            print(f'Could not plot area for {hp}: {e}')
+
   
 
-def plot_combined_state_space_from_dict(rnn_act_dict, hp_to_use, model_path):
+def plot_combined_state_space_from_dict(rnn_act_dict, hp, model_path):
     """
     Extract Hs, Rs, Os for a specific model_path from rnn_act_dict and plot using plot_combined_state_space.
     Args:
         rnn_act_dict: dict, output from utils_data.get_rnn_activity
-        hp_to_use: str, hyperparameter name (e.g. 'gamma')
+        hp: str, hyperparameter name (e.g. 'gamma')
         model_path: str, path to the model to plot
     """
-    model_list = rnn_act_dict[hp_to_use]['model_list']
+    model_list = rnn_act_dict[hp]['model_list']
     try:
         model_idx = model_list.index(model_path)
     except ValueError:
-        raise ValueError(f"Model path {model_path} not found in model_list for {hp_to_use}.")
-    Hs = rnn_act_dict[hp_to_use]['Hs'][model_idx]
-    Rs = rnn_act_dict[hp_to_use]['Rs'][model_idx]
-    Os = rnn_act_dict[hp_to_use]['Os'][model_idx]
+        raise ValueError(f"Model path {model_path} not found in model_list for {hp}.")
+    Hs = rnn_act_dict[hp]['Hs'][model_idx]
+    Rs = rnn_act_dict[hp]['Rs'][model_idx]
+    Os = rnn_act_dict[hp]['Os'][model_idx]
     plot_combined_state_space(Hs, Rs, Os)

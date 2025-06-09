@@ -1,5 +1,3 @@
-
-
 #%% part 0 - setup files
 
 #to-do= add if __name__ == "__main__": to other scripts
@@ -116,7 +114,7 @@ rnn_info = config.rnn_info() #get the reference info for the RNN model
 
 model_filters = utils_data.get_model_filters(
     hp_list = rnn_weights_dict,
-    data_dir = save_dir,
+    data_dir = save_dir_behav,
     threshold = 10
 )
 
@@ -141,7 +139,9 @@ plots_rnn.plot_combined_state_space_from_dict(
     rnn_act_dict = rnn_act_dict, 
     model_path = "./model_params/36.0_V3_0.0ns_Nonelb_Noneub_0.95g_64n_40000e_2s.pth")
 
-# rnn analyses - fixed points
+
+
+# rnn analyses - fixed points (setup to run with individual models)
 
 analyze_rnn = analyze_rnn_fp.analyze_fixed_points(
     model = actor_critic,
@@ -149,6 +149,12 @@ analyze_rnn = analyze_rnn_fp.analyze_fixed_points(
     model_name = "12.0_V3_0.0ns_Nonelb_Noneub_0.7g_64n_40000e_2s"
 )
 
+fixedpt_analysis.run_fp_analysis(
+    model = actor_critic,
+    rnn_act_dict = rnn_info_dict,
+    model_name = "12.0_V3_0.0ns_Nonelb_Noneub_0.7g_64n_40000e_2s",
+    save_dir = "data/fixed_points/model_params_101000/"
+)
 # analyze with bayesian models
 
 model_pyem(config)
@@ -156,3 +162,9 @@ model_pyem(config)
 
 
 # %% part 4 - other analysis in progress, model checks
+
+# reproduce behavioral data
+#run human_data.py
+
+
+

@@ -48,47 +48,6 @@ def simulate_rnn(W, h0, num_steps=100):
         trajectory.append(h)
     return np.array(trajectory)
 
-# Parameters
-np.random.seed(42)
-N = 64  # Dimensionality of hidden state
-W = np.random.randn(N, N) * 0.1  # Weight matrix (scaled for stability)
-
-model_path = "./model_params/36.0_V3_0.0ns_Nonelb_Noneub_0.95g_64n_40000e_2s.pth" # good model
-# model_path = "./model_params_gamma/12.0_V3_0.0ns_Nonelb_Noneub_0.7g_64n_40000e_2s.pth"
-
-model = ActorCritic(8, N, 3, noise=0.0)
-if model_path is not None:
-    model.load_state_dict(torch.load(model_path))
-    print('Load Model')
-W  = np.array(model.state_dict()['rnn.weight_hh_l0'])
-
-# Find fixed points
-fixed_points = find_fixed_points(W)
-print("Number of fixed points found:", len(fixed_points))
-
-# Analyze stability of fixed points
-for i, h in enumerate(fixed_points):
-    J = compute_jacobian(h, W)
-    eigenvalues = np.linalg.eigvals(J)
-    print(f"Fixed point {i + 1}:")
-    print("Max eigenvalue magnitude:", np.max(np.abs(eigenvalues)))
-    if np.max(np.abs(eigenvalues)) < 1:
-        print("Stable fixed point (attractor).")
-    else:
-        print("Unstable fixed point.")
-
-# Check for line attractors
-null_space_basis = check_line_attractor(W)
-
-# Simulate and plot dynamics
-h0 = np.random.randn(N)  # Initial state
-trajectory = simulate_rnn(W, h0)
-
-# Use PCA to reduce dimensionality for visualization
-pca = PCA(n_components=2)
-trajectory_2d = pca.fit_transform(trajectory)
-fixed_points_2d = pca.transform(fixed_points) if len(fixed_points) > 0 else None
-
 # Plot trajectory in 2D PCA space
 def plot_trajectory(trajectory, fixed_points=None):
     plt.figure(figsize=(8, 6))
@@ -101,3 +60,58 @@ def plot_trajectory(trajectory, fixed_points=None):
     plt.legend()
     plt.grid()
     plt.show()
+
+def run_fp_analysis(
+        model,
+        rnn_info_dict, 
+        model_path = "./model_params/36.0_V3_0.0ns_Nonelb_Noneub_0.95g_64n_40000e_2s.pth"
+):
+    """
+    Main function to run the fixed point analysis.
+    It initializes the model, finds fixed points, computes the Jacobian,
+    checks for line attractors, and simulates the RNN dynamics.
+    """
+    # Parameters
+    np.random.seed(42)
+    N = rnn_info_dict['hidden_dim']  # Dimensionality of hidden state
+    W = np.random.randn(N, N) * 0.1  # Weight matrix (scaled for stability)
+
+    # model_path = "./model_params_gamma/12.0_V3_0.0ns_Nonelb_Noneub_0.7g_64n_40000e_2s.pth"
+
+    if model_path is not None:
+        model.load_state_dict(torch.load(model_path))
+        print('Load Model')
+    W  = np.array(model.state_dict()['rnn.weight_hh_l0'])
+
+    # Find fixed points
+    fixed_points = find_fixed_points(W)
+    print("Number of fixed points found:", len(fixed_points))
+
+    # Analyze stability of fixed points
+    for i, h in enumerate(fixed_points):
+        J = compute_jacobian(h, W)
+        eigenvalues = np.linalg.eigvals(J)
+        print(f"Fixed point {i + 1}:")
+        print("Max eigenvalue magnitude:", np.max(np.abs(eigenvalues)))
+        if np.max(np.abs(eigenvalues)) < 1:
+            print("Stable fixed point (attractor).")
+        else:
+            print("Unstable fixed point.")
+
+    # Check for line attractors
+    null_space_basis = check_line_attractor(W)
+
+    # Simulate and plot dynamics
+    h0 = np.random.randn(N)  # Initial state
+    trajectory = simulate_rnn(W, h0)
+
+    # Use PCA to reduce dimensionality for visualization
+    pca = PCA(n_components=2)
+    trajectory_2d = pca.fit_transform(trajectory)
+    fixed_points_2d = pca.transform(fixed_points) if len(fixed_points) > 0 else None
+
+    plot_trajectory(trajectory_2d, fixed_points_2d)
+
+    return pca, trajectory_2d, fixed_points_2d
+
+

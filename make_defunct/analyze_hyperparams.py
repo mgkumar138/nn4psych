@@ -15,35 +15,6 @@ print(args)
 # import utils_calcs as utils_calcs
 
 
-def plot_param_area(param, areas, xlabel, validms, logx=False, legend=False):
-
-    utils_data.saveload(f'./analysis/{xlabel}_area',[param, areas], 'save')
-
-    labels = ['CP', 'OB']
-    colors= ['orange', 'brown']
-
-    plt.figure(figsize=(3,2.5))
-    for c in range(2):
-        m,s = utils_calcs.get_mean_ci(areas[:,:,c],validms)
-
-        plt.plot(param, m, label=labels[c], color=colors[c])
-        plt.fill_between(x=param, y1=m-s, y2=m+s, alpha=0.2, color=colors[c])
-
-    dfarea = areas[:,:,0] - areas[:,:,1]
-    m,s = utils_calcs.get_mean_ci(dfarea,validms)
-    e = areas.shape[0]
-    plt.plot(param, m, label='CP-OB', color='k', linewidth=2)
-    plt.fill_between(x=param, y1=m-s, y2=m+s, alpha=0.2, color='k')
-    plt.xlabel(xlabel)
-    if legend:
-        plt.legend()
-    plt.ylabel('$A$')
-    if logx:
-        plt.xscale('log')
-    
-    plt.tight_layout()
-    plt.savefig(f'./analysis/{xlabel}_area_{e}e.png')
-    plt.savefig(f'./analysis/{xlabel}_area_{e}e.svg')
 
 
 
