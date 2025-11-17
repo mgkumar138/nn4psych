@@ -9,11 +9,11 @@ model_params
 state_data
 model_params*
 figs*
-/analysis
+analysis
 cleanrl
 cleanrl
 normative_model
-/toy
-/v0
-/v1
-/v2
+toy
+v0
+v1
+v2
