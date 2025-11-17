@@ -1,0 +1,49 @@
+name: nn4psych
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  # Core Python
+  - python=3.10
+
+  # Scientific Computing
+  - numpy>=1.24
+  - scipy>=1.10
+  - pandas>=2.0
+
+  # Visualization
+  - matplotlib>=3.7
+  - seaborn>=0.12
+
+  # Machine Learning
+  - pytorch>=2.0
+  - scikit-learn>=1.2
+
+  # Statistics
+  - statsmodels>=0.14
+
+  # Bayesian Modeling (optional)
+  - pymc>=5.0
+  - arviz>=0.15
+
+  # Development Tools
+  - pytest>=7.0
+  - pytest-cov>=4.0
+  - black>=23.0
+  - flake8>=6.0
+  - mypy>=1.0
+
+  # Jupyter
+  - jupyter>=1.0
+  - ipython>=8.0
+  - matplotlib-inline
+
+  # Utilities
+  - pyyaml>=6.0
+  - tqdm>=4.60
+
+  # Environment
+  - pip
+
+  - pip:
+    - gym>=0.26.0

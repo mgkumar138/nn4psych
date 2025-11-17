@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools-scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nn4psych"
+version = "0.2.0"
+description = "Neural Networks for Psychological Modeling - RNN Actor-Critic for Predictive Inference Tasks"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "NN4Psych Team"},
+]
+keywords = ["neural-networks", "psychology", "reinforcement-learning", "rnn", "actor-critic"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "matplotlib>=3.4.0",
+    "torch>=1.9.0",
+    "gym>=0.21.0",
+    "pyyaml>=5.4.0",
+    "tqdm>=4.60.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "black>=21.0",
+    "flake8>=3.9",
+    "mypy>=0.900",
+    "pre-commit>=2.13",
+]
+bayesian = [
+    "pymc>=4.0.0",
+    "arviz>=0.11.0",
+    "pytensor>=2.0.0",
+]
+jax = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "optax>=0.1.0",
+]
+all = [
+    "nn4psych[dev,bayesian]",
+]
+
+[project.urls]
+Homepage = "https://github.com/adammanoogian/nn4psych"
+Repository = "https://github.com/adammanoogian/nn4psych"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nn4psych*"]
+exclude = ["tests*", "archive*", "v0*", "v1*", "v2*", "toy*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=nn4psych --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
